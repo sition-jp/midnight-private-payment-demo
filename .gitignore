@@ -23,6 +23,10 @@ deploy-test/contracts/managed/
 # Private state
 *-state/
 
+# LevelDB data
+midnight-level-db/
+*-level-db/
+
 # OS
 .DS_Store
 Thumbs.db
