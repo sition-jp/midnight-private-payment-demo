@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Wallet seed (sensitive)
+.midnight-seed
+
+# Deployment info (contains addresses)
+deploy-test/deployment.json
+
+# Contract build artifacts
+deploy-test/contracts/managed/
+
+# Private state
+*-state/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Local files
+*.local

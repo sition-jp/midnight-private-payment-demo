@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__midnight__midnight-get-latest-syntax",
+      "mcp__midnight__midnight-list-examples",
+      "mcp__midnight__midnight-get-file",
+      "mcp__midnight__midnight-review-contract",
+      "mcp__midnight__midnight-compile-contract",
+      "mcp__midnight__midnight-get-version-info",
+      "mcp__midnight__midnight-check-breaking-changes",
+      "mcp__midnight__midnight-get-migration-guide",
+      "mcp__midnight__midnight-search-docs",
+      "mcp__midnight__midnight-fetch-docs",
+      "Bash(npx tsc:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "midnight"
+  ]
+}

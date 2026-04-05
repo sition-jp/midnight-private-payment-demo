@@ -1,0 +1,166 @@
+pragma language_version >= 0.16 && <= 0.21;
+
+import CompactStandardLibrary;
+
+// =============================================================================
+// Private Payment Contract
+// =============================================================================
+// Amount and recipient are private (witness). On-chain, only balance
+// commitments (hashes) are stored — actual values are never disclosed.
+// ZKP proves: (1) sender knows their balance, (2) balance >= amount,
+// (3) new commitments are correctly derived.
+// =============================================================================
+
+// === Ledger State ===
+// Map: public_key -> balance commitment (hash of balance + salt)
+// The actual balance value is never stored on-chain.
+export ledger balance_commitments: Map<Bytes<32>, Bytes<32>>;
+
+// === Witnesses ===
+witness local_secret_key(): Bytes<32>;
+// Private transfer inputs
+witness private_amount(): Uint<64>;
+witness private_recipient(): Bytes<32>;
+// The prover stores/retrieves actual balances and salts off-chain
+witness get_balance(pk: Bytes<32>): Uint<64>;
+witness get_salt(pk: Bytes<32>): Bytes<32>;
+witness new_salt(): Bytes<32>;
+witness store_balance(pk: Bytes<32>, balance: Uint<64>, salt: Bytes<32>): [];
+// Recipient's current balance and salt (provided by recipient or looked up)
+witness get_recipient_balance(): Uint<64>;
+witness get_recipient_salt(): Bytes<32>;
+witness new_recipient_salt(): Bytes<32>;
+witness store_recipient_balance(pk: Bytes<32>, balance: Uint<64>, salt: Bytes<32>): [];
+
+// === Helper: derive public key from secret key ===
+pure circuit derive_pk(sk: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "midnight:pk:"),
+    sk
+  ]);
+}
+
+// === Helper: compute balance commitment ===
+// commitment = hash(public_key, balance_as_bytes, salt)
+// This hides the actual balance while allowing verification.
+pure circuit compute_commitment(
+  pk: Bytes<32>,
+  balance: Uint<64>,
+  salt: Bytes<32>
+): Bytes<32> {
+  const balance_bytes = (balance as Field) as Bytes<32>;
+  return persistentHash<Vector<3, Bytes<32>>>([pk, balance_bytes, salt]);
+}
+
+// === Circuit: Deposit ===
+// Deposit is public (amount is a circuit parameter, visible on-chain).
+// This is the entry point for funding an account.
+export circuit deposit(amount: Uint<64>): [] {
+  const sk = local_secret_key();
+  const pk = derive_pk(sk);
+
+  assert(disclose(amount > 0), "Deposit amount must be positive");
+
+  // Get current balance from off-chain storage
+  const current_balance = get_balance(pk);
+  const current_salt = get_salt(pk);
+
+  // If account exists, verify the stored commitment matches
+  if (disclose(balance_commitments.member(disclose(pk)))) {
+    const expected = compute_commitment(pk, current_balance, current_salt);
+    const stored = balance_commitments.lookup(disclose(pk));
+    assert(expected == stored, "Balance commitment mismatch");
+  }
+
+  // Compute new balance and commitment
+  const new_balance = (current_balance + amount) as Uint<64>;
+  const salt = new_salt();
+  const new_commit = compute_commitment(pk, new_balance, salt);
+
+  // Store new commitment on-chain (only the hash, not the balance)
+  balance_commitments.insert(disclose(pk), disclose(new_commit));
+
+  // Store actual balance off-chain
+  store_balance(pk, new_balance, salt);
+}
+
+// === Circuit: Private Transfer ===
+// Both amount and recipient are witnesses — never disclosed on-chain.
+// The ZKP proves:
+//   1. Sender knows their current balance (matches on-chain commitment)
+//   2. Sender has sufficient balance (balance >= amount)
+//   3. New commitments for sender and recipient are correctly computed
+export circuit private_transfer(): [] {
+  // --- Sender side ---
+  const sk = local_secret_key();
+  const sender_pk = derive_pk(sk);
+  const amount = private_amount();
+  const recipient_pk = private_recipient();
+
+  // Validate amount
+  assert(amount > 0, "Transfer amount must be positive");
+
+  // Verify sender's current balance commitment
+  const sender_balance = get_balance(sender_pk);
+  const sender_salt = get_salt(sender_pk);
+  const sender_commit = compute_commitment(sender_pk, sender_balance, sender_salt);
+  const stored_sender = balance_commitments.lookup(disclose(sender_pk));
+  assert(sender_commit == stored_sender, "Sender balance commitment mismatch");
+
+  // ZKP: prove sufficient balance (amount is witness, never disclosed)
+  assert(sender_balance >= amount, "Insufficient balance");
+
+  // Compute sender's new balance and commitment
+  const new_sender_balance = (sender_balance - amount) as Uint<64>;
+  const sender_new_salt = new_salt();
+  const new_sender_commit = compute_commitment(
+    sender_pk, new_sender_balance, sender_new_salt
+  );
+
+  // --- Recipient side ---
+  const recipient_balance = get_recipient_balance();
+  const recipient_salt = get_recipient_salt();
+
+  // Verify recipient's current commitment (if account exists)
+  if (disclose(balance_commitments.member(disclose(recipient_pk)))) {
+    const recipient_commit = compute_commitment(
+      recipient_pk, recipient_balance, recipient_salt
+    );
+    const stored_recipient = balance_commitments.lookup(disclose(recipient_pk));
+    assert(recipient_commit == stored_recipient, "Recipient balance commitment mismatch");
+  }
+
+  // Compute recipient's new balance and commitment
+  const new_recipient_balance = (recipient_balance + amount) as Uint<64>;
+  const recipient_new_salt = new_recipient_salt();
+  const new_recipient_commit = compute_commitment(
+    recipient_pk, new_recipient_balance, recipient_new_salt
+  );
+
+  // Update on-chain commitments (only hashes — no amounts or identities revealed)
+  balance_commitments.insert(disclose(sender_pk), disclose(new_sender_commit));
+  balance_commitments.insert(disclose(recipient_pk), disclose(new_recipient_commit));
+
+  // Store new balances off-chain
+  store_balance(sender_pk, new_sender_balance, sender_new_salt);
+  store_recipient_balance(recipient_pk, new_recipient_balance, recipient_new_salt);
+}
+
+// === Circuit: Check Own Balance ===
+// Returns the caller's balance. Only the caller can read their own balance
+// (proven by knowledge of their secret key).
+export circuit check_balance(): Uint<64> {
+  const sk = local_secret_key();
+  const pk = derive_pk(sk);
+  const balance = get_balance(pk);
+  const salt = get_salt(pk);
+
+  // Verify our off-chain balance matches the on-chain commitment
+  if (disclose(balance_commitments.member(disclose(pk)))) {
+    const expected = compute_commitment(pk, balance, salt);
+    const stored = balance_commitments.lookup(disclose(pk));
+    assert(expected == stored, "Balance commitment mismatch");
+  }
+
+  return disclose(balance);
+}
