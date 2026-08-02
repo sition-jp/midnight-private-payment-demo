@@ -20,7 +20,8 @@
     "proof-server:start": "docker compose up -d",
     "proof-server:stop": "docker compose down",
     "clean": "rm -rf contracts/managed deployment.json",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run test:disclosure",
+    "test:disclosure": "node --import tsx --test src/private-payment-disclosure.test.ts"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-js": "2.5.1",
