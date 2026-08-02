@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "compile": "compact compile contracts/hello-world.compact contracts/managed/hello-world",
-    "compile:private": "compact compile contracts/private-payment.compact contracts/managed/private-payment",
+    "compile:private": "compact compile +0.31.1 ../contracts/private-payment/private_payment.compact contracts/managed/private-payment",
     "build": "npx tsc --noEmit || true",
     "setup": "docker compose up -d && npm run compile:private && npm run deploy",
     "deploy": "npx tsx src/deploy.ts",

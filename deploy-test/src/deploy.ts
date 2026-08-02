@@ -180,7 +180,7 @@ const contractPath = path.join(zkConfigPath, 'contract', 'index.js');
 
 // Check if contract is compiled
 if (!fs.existsSync(contractPath)) {
-  console.error('\n❌ Contract not compiled! Run: compact compile contracts/private-payment.compact contracts/managed/private-payment\n');
+  console.error('\n❌ Contract not compiled! Run: npm run compile:private\n');
   process.exit(1);
 }
 
