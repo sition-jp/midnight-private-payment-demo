@@ -1,5 +1,5 @@
 import * as __compactRuntime from '@midnight-ntwrk/compact-runtime';
-__compactRuntime.checkRuntimeVersion('0.14.0');
+__compactRuntime.checkRuntimeVersion('0.16.0');
 
 const _descriptor_0 = new __compactRuntime.CompactTypeBytes(32);
 
@@ -103,14 +103,14 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('deposit',
                                      'argument 1 (as invoked from Typescript)',
-                                     'private-payment.compact line 48 char 1',
+                                     'private_payment.compact line 61 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(typeof(amount_0) === 'bigint' && amount_0 >= 0n && amount_0 <= 18446744073709551615n)) {
           __compactRuntime.typeError('deposit',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'private-payment.compact line 48 char 1',
+                                     'private_payment.compact line 61 char 1',
                                      'Uint<0..18446744073709551616>',
                                      amount_0)
         }
@@ -136,7 +136,7 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('private_transfer',
                                      'argument 1 (as invoked from Typescript)',
-                                     'private-payment.compact line 75 char 1',
+                                     'private_payment.compact line 97 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
@@ -159,7 +159,7 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('check_balance',
                                      'argument 1 (as invoked from Typescript)',
-                                     'private-payment.compact line 129 char 1',
+                                     'private_payment.compact line 157 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
@@ -176,6 +176,11 @@ export class Contract {
       }
     };
     this.impureCircuits = {
+      deposit: this.circuits.deposit,
+      private_transfer: this.circuits.private_transfer,
+      check_balance: this.circuits.check_balance
+    };
+    this.provableCircuits = {
       deposit: this.circuits.deposit,
       private_transfer: this.circuits.private_transfer,
       check_balance: this.circuits.check_balance
@@ -245,7 +250,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('local_secret_key',
                                  'return value',
-                                 'private-payment.compact line 17 char 1',
+                                 'private_payment.compact line 23 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -262,7 +267,7 @@ export class Contract {
     if (!(typeof(result_0) === 'bigint' && result_0 >= 0n && result_0 <= 18446744073709551615n)) {
       __compactRuntime.typeError('private_amount',
                                  'return value',
-                                 'private-payment.compact line 18 char 1',
+                                 'private_payment.compact line 25 char 1',
                                  'Uint<0..18446744073709551616>',
                                  result_0)
     }
@@ -279,7 +284,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('private_recipient',
                                  'return value',
-                                 'private-payment.compact line 19 char 1',
+                                 'private_payment.compact line 26 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -297,7 +302,7 @@ export class Contract {
     if (!(typeof(result_0) === 'bigint' && result_0 >= 0n && result_0 <= 18446744073709551615n)) {
       __compactRuntime.typeError('get_balance',
                                  'return value',
-                                 'private-payment.compact line 20 char 1',
+                                 'private_payment.compact line 28 char 1',
                                  'Uint<0..18446744073709551616>',
                                  result_0)
     }
@@ -315,7 +320,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('get_salt',
                                  'return value',
-                                 'private-payment.compact line 21 char 1',
+                                 'private_payment.compact line 29 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -332,7 +337,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('new_salt',
                                  'return value',
-                                 'private-payment.compact line 22 char 1',
+                                 'private_payment.compact line 30 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -352,7 +357,7 @@ export class Contract {
     if (!(Array.isArray(result_0) && result_0.length === 0 )) {
       __compactRuntime.typeError('store_balance',
                                  'return value',
-                                 'private-payment.compact line 23 char 1',
+                                 'private_payment.compact line 31 char 1',
                                  '[]',
                                  result_0)
     }
@@ -369,7 +374,7 @@ export class Contract {
     if (!(typeof(result_0) === 'bigint' && result_0 >= 0n && result_0 <= 18446744073709551615n)) {
       __compactRuntime.typeError('get_recipient_balance',
                                  'return value',
-                                 'private-payment.compact line 24 char 1',
+                                 'private_payment.compact line 33 char 1',
                                  'Uint<0..18446744073709551616>',
                                  result_0)
     }
@@ -386,7 +391,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('get_recipient_salt',
                                  'return value',
-                                 'private-payment.compact line 25 char 1',
+                                 'private_payment.compact line 34 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -403,7 +408,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('new_recipient_salt',
                                  'return value',
-                                 'private-payment.compact line 26 char 1',
+                                 'private_payment.compact line 35 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -424,7 +429,7 @@ export class Contract {
     if (!(Array.isArray(result_0) && result_0.length === 0 )) {
       __compactRuntime.typeError('store_recipient_balance',
                                  'return value',
-                                 'private-payment.compact line 27 char 1',
+                                 'private_payment.compact line 36 char 1',
                                  '[]',
                                  result_0)
     }
@@ -441,7 +446,7 @@ export class Contract {
   _compute_commitment_0(pk_0, balance_0, salt_0) {
     const balance_bytes_0 = __compactRuntime.convertFieldToBytes(32,
                                                                  balance_0,
-                                                                 'private-payment.compact line 43 char 25');
+                                                                 'private_payment.compact line 54 char 25');
     return this._persistentHash_1([pk_0, balance_bytes_0, salt_0]);
   }
   _deposit_0(context, partialProofData, amount_0) {
@@ -495,7 +500,7 @@ export class Contract {
     }
     const new_balance_0 = ((t1) => {
                             if (t1 > 18446744073709551615n) {
-                              throw new __compactRuntime.CompactError('private-payment.compact line 63 char 23: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 18446744073709551615');
+                              throw new __compactRuntime.CompactError('private_payment.compact line 79 char 23: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 18446744073709551615');
                             }
                             return t1;
                           })(current_balance_0 + amount_0);
@@ -614,7 +619,7 @@ export class Contract {
     }
     const new_recipient_balance_0 = ((t1) => {
                                       if (t1 > 18446744073709551615n) {
-                                        throw new __compactRuntime.CompactError('private-payment.compact line 113 char 33: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 18446744073709551615');
+                                        throw new __compactRuntime.CompactError('private_payment.compact line 138 char 33: cast from Field or Uint value to smaller Uint value failed: ' + t1 + ' is greater than 18446744073709551615');
                                       }
                                       return t1;
                                     })(recipient_balance_0 + amount_0);
@@ -795,7 +800,7 @@ export function ledger(stateOrChargedState) {
         if (!(key_0.buffer instanceof ArrayBuffer && key_0.BYTES_PER_ELEMENT === 1 && key_0.length === 32)) {
           __compactRuntime.typeError('member',
                                      'argument 1',
-                                     'private-payment.compact line 14 char 1',
+                                     'private_payment.compact line 20 char 1',
                                      'Bytes<32>',
                                      key_0)
         }
@@ -824,7 +829,7 @@ export function ledger(stateOrChargedState) {
         if (!(key_0.buffer instanceof ArrayBuffer && key_0.BYTES_PER_ELEMENT === 1 && key_0.length === 32)) {
           __compactRuntime.typeError('lookup',
                                      'argument 1',
-                                     'private-payment.compact line 14 char 1',
+                                     'private_payment.compact line 20 char 1',
                                      'Bytes<32>',
                                      key_0)
         }

@@ -1,10 +1,17 @@
 export const MIDNIGHT_CONFIG = {
   network: 'preprod' as const,
-  indexer: 'https://indexer.preprod.midnight.network/api/v3/graphql',
-  indexerWS: 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws',
+  indexer: 'https://indexer.preprod.midnight.network/api/v4/graphql',
+  indexerWS: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
   node: 'https://rpc.preprod.midnight.network',
-  proofServer: 'http://localhost:6300',  // Direct connection to Docker proof server
-  faucetUrl: 'https://faucet.preprod.midnight.network/',
+  proofServer: 'http://127.0.0.1:6300',
+  faucetUrl: 'https://midnight-tmnight-preprod.nethermind.dev/',
   explorerUrl: 'https://preprod.midnightexplorer.com',
-  contractAddress: '489067b2c29c99b314ad85b988fbb4de8f404b4bf565021d302da7dfbe8b76a9',
+  contractAddress: (import.meta.env.VITE_MIDNIGHT_CONTRACT_ADDRESS ?? '').trim(),
 };
+
+export function requireContractAddress(): string {
+  if (!/^[0-9a-fA-F]{64}$/.test(MIDNIGHT_CONFIG.contractAddress)) {
+    throw new Error('Set VITE_MIDNIGHT_CONTRACT_ADDRESS to a 64-character contract address');
+  }
+  return MIDNIGHT_CONFIG.contractAddress;
+}

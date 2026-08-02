@@ -2,7 +2,7 @@
  * Type definitions for the Midnight Private Payment DApp.
  */
 
-import type { DAppConnectorAPI, DAppConnectorWalletAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 
 // ─── Wallet Types ────────────────────────────────────────────────────────────
 
@@ -37,13 +37,13 @@ export interface WalletContext {
 
   // Lace-mode specific fields (undefined for demo mode)
   /** The DApp connector API instance (Lace mode only) */
-  readonly laceApi?: DAppConnectorAPI;
+  readonly laceApi?: InitialAPI;
   /** The Lace wallet API (Lace mode only) */
-  readonly laceWallet?: DAppConnectorWalletAPI;
+  readonly laceWallet?: ConnectedAPI;
 
   // 1AM-mode specific fields
   /** Raw 1AM connected wallet API (17 methods). Used by contract.ts to build providers. */
-  readonly rawWalletApi?: any;
+  readonly rawWalletApi?: ConnectedAPI;
 }
 
 // ─── Transaction Types ───────────────────────────────────────────────────────
@@ -85,6 +85,4 @@ export interface ContractContext {
 export interface TransferContext {
   amount: bigint;
   recipient: Uint8Array;
-  recipientBalance: bigint;
-  recipientSalt: Uint8Array;
 }

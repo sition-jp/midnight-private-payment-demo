@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
@@ -19,11 +20,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      ws: 'isomorphic-ws',
+      ws: fileURLToPath(new URL('./src/shims/ws.ts', import.meta.url)),
+      'isomorphic-ws': fileURLToPath(new URL('./src/shims/ws.ts', import.meta.url)),
     },
   },
   optimizeDeps: {
-    exclude: ['@midnight-ntwrk/ledger-v7'],
+    exclude: ['@midnight-ntwrk/ledger-v8'],
   },
   build: {
     target: 'esnext',

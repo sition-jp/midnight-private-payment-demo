@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { WalletContext, ContractContext } from '../types/index.js';
 import { connectToContract } from '../midnight/contract.js';
-import { MIDNIGHT_CONFIG } from '../midnight/config.js';
+import { requireContractAddress } from '../midnight/config.js';
 
 export interface UseContractReturn {
   connect: (walletContext: WalletContext) => Promise<void>;
@@ -24,7 +24,7 @@ export function useContract(): UseContractReturn {
       const secretKey = crypto.getRandomValues(new Uint8Array(32));
       const ctx = await connectToContract(
         walletContext,
-        MIDNIGHT_CONFIG.contractAddress,
+        requireContractAddress(),
         secretKey,
       );
       setContract(ctx);

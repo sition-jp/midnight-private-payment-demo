@@ -11,7 +11,16 @@ import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
-import type { MidnightProviders } from '@midnight-ntwrk/midnight-js-types';
+import {
+  createProofProvider,
+  type MidnightProviders,
+  type UnboundTransaction,
+} from '@midnight-ntwrk/midnight-js-types';
+import {
+  Transaction,
+  type FinalizedTransaction,
+} from '@midnight-ntwrk/ledger-v8';
+import { fromHex, toHex } from '@midnight-ntwrk/midnight-js-utils';
 
 import { MIDNIGHT_CONFIG } from './config.js';
 import { inMemoryPrivateStateProvider } from '../providers/InMemoryPrivateStateProvider.js';
@@ -49,9 +58,9 @@ async function loadContractModule() {
 async function buildCompiledContract() {
   const contractModule = await loadContractModule();
 
-  const compiledContract = (CompiledContract as any).make('private-payment', contractModule.Contract).pipe(
-    (CompiledContract as any).withWitnesses(createWitnesses()),
-    (CompiledContract as any).withCompiledFileAssets(window.location.origin),
+  const compiledContract = CompiledContract.make('private-payment', contractModule.Contract).pipe(
+    CompiledContract.withWitnesses(createWitnesses()),
+    CompiledContract.withCompiledFileAssets(window.location.origin),
   );
 
   return { compiledContract };
@@ -83,8 +92,8 @@ function createBrowserProviders(walletCtx: WalletContext): MidnightProviders {
       MIDNIGHT_CONFIG.indexer,
       MIDNIGHT_CONFIG.indexerWS,
     ),
-    zkConfigProvider: zkConfigProvider as any,
-    proofProvider: httpClientProofProvider(proofServerUrl, zkConfigProvider as any),
+    zkConfigProvider,
+    proofProvider: httpClientProofProvider(proofServerUrl, zkConfigProvider),
     walletProvider: walletProvider as unknown as MidnightProviders['walletProvider'],
     midnightProvider: walletProvider as unknown as MidnightProviders['midnightProvider'],
   };
@@ -94,7 +103,7 @@ function createBrowserProviders(walletCtx: WalletContext): MidnightProviders {
 
 /**
  * Assemble providers using 1AM wallet's native APIs.
- * Uses 1AM's cloud prover (api-preprod.1am.xyz) instead of local proof server.
+ * Delegates proving to 1AM instead of using the localhost proof server.
  * Uses 1AM's balanceUnsealedTransaction for tx balancing.
  */
 async function create1AMProviders(walletCtx: WalletContext): Promise<MidnightProviders> {
@@ -103,39 +112,54 @@ async function create1AMProviders(walletCtx: WalletContext): Promise<MidnightPro
     throw new Error('1AM wallet API not available. rawWalletApi is undefined.');
   }
 
-  // Get network config from 1AM (includes cloud prover URL and indexer v4 URLs)
-  let indexerUrl = MIDNIGHT_CONFIG.indexer;
-  let indexerWsUrl = MIDNIGHT_CONFIG.indexerWS;
-  let proverUrl = MIDNIGHT_CONFIG.proofServer;
-  try {
-    const config = await api.getConfiguration();
-    if (config.indexerUri) indexerUrl = config.indexerUri;
-    if (config.indexerWsUri) indexerWsUrl = config.indexerWsUri;
-    if (config.proverServerUri) proverUrl = config.proverServerUri;
-  } catch {
-    // Fall back to hardcoded URLs
+  if (typeof api.getProvingProvider !== 'function') {
+    throw new Error('This wallet does not expose the delegated proving API required by the workshop');
   }
 
-  // Use standard httpClientProofProvider pointed at 1AM's cloud prover
-  // This maintains zkConfigProvider compatibility (getZKIR etc.)
+  // Prefer the wallet's v4 indexer endpoints when they are compatible.
+  let indexerUrl = MIDNIGHT_CONFIG.indexer;
+  let indexerWsUrl = MIDNIGHT_CONFIG.indexerWS;
+  try {
+    const config = await api.getConfiguration();
+    if (config.indexerUri?.includes('/api/v4/graphql')) indexerUrl = config.indexerUri;
+    if (config.indexerWsUri?.includes('/api/v4/graphql')) indexerWsUrl = config.indexerWsUri;
+  } catch {
+    // The canonical preprod v4 endpoints remain the source of truth.
+  }
+
   const zkConfigProvider = new FetchZkConfigProvider<PrivatePaymentCircuitKeys>(
     window.location.origin + '/contracts/private-payment',
     fetch.bind(window),
   );
+  const delegatedProver = await api.getProvingProvider(zkConfigProvider);
+  const proofProvider = createProofProvider(delegatedProver);
+
+  const balanceTx = async (tx: UnboundTransaction): Promise<FinalizedTransaction> => {
+    const result = await api.balanceUnsealedTransaction(toHex(tx.serialize()));
+    return Transaction.deserialize('signature', 'proof', 'binding', fromHex(result.tx));
+  };
+
+  const submitTx = async (tx: FinalizedTransaction): Promise<string> => {
+    const [transactionId] = tx.identifiers();
+    if (!transactionId) {
+      throw new Error('Finalized transaction has no submission identifier');
+    }
+    await api.submitTransaction(toHex(tx.serialize()));
+    return transactionId;
+  };
 
   return {
     privateStateProvider: inMemoryPrivateStateProvider(),
     publicDataProvider: indexerPublicDataProvider(indexerUrl, indexerWsUrl),
-    zkConfigProvider: zkConfigProvider as any,
-    proofProvider: httpClientProofProvider(proverUrl, zkConfigProvider as any),
+    zkConfigProvider,
+    proofProvider,
     walletProvider: {
       getCoinPublicKey: () => walletCtx.coinPublicKey,
       getEncryptionPublicKey: () => walletCtx.encryptionPublicKey,
-      balanceTx: (tx: unknown) => api.balanceUnsealedTransaction(tx),
-      submitTx: (tx: unknown) => api.submitTransaction(tx),
+      balanceTx,
     } as unknown as MidnightProviders['walletProvider'],
     midnightProvider: {
-      submitTx: (tx: unknown) => api.submitTransaction(tx),
+      submitTx,
     } as unknown as MidnightProviders['midnightProvider'],
   };
 }
@@ -225,14 +249,10 @@ export async function executePrivateTransfer(
   contractCtx: ContractContext,
   amount: bigint,
   recipient: Uint8Array,
-  recipientBalance = 0n,
-  recipientSalt = new Uint8Array(32),
 ): Promise<TransactionResult> {
   const ctx: TransferContext = {
     amount,
     recipient,
-    recipientBalance,
-    recipientSalt,
   };
   setTransferContext(ctx);
 

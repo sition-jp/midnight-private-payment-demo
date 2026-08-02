@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import type { CurrentTx } from '../hooks/useTransaction.js';
+import { deriveContractPublicKey } from '../midnight/witness.js';
 import { TxResult } from './TxResult.js';
 
 interface TransferPanelProps {
@@ -12,8 +13,9 @@ interface TransferPanelProps {
 }
 
 function generateRandomRecipient(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes)
+  const secretKey = crypto.getRandomValues(new Uint8Array(32));
+  const publicKey = deriveContractPublicKey(secretKey);
+  return Array.from(publicKey)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
@@ -51,8 +53,8 @@ export function TransferPanel({
       <div className="bg-[#16213e] rounded-lg p-6">
         <h2 className="text-xl font-bold text-white mb-2">Private Transfer</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          Send tokens privately using Zero-Knowledge Proofs. The amount and recipient are hidden
-          on-chain.
+          Update committed balances with a Zero-Knowledge Proof. The amount is hidden; sender and
+          recipient public keys remain visible on-chain.
         </p>
 
         {/* ZKP Badge */}
@@ -129,7 +131,7 @@ export function TransferPanel({
                 Amount: PRIVATE
               </span>
               <span className="bg-[#0066ff]/20 text-[#0066ff] px-3 py-1 rounded-full text-xs">
-                Recipient: PRIVATE
+                Recipient: PUBLIC
               </span>
             </div>
           )}

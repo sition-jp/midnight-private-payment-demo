@@ -1,7 +1,6 @@
 import type { WalletMode, WalletContext } from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
 import type { ContractContext } from '../types/index.js';
-import { MIDNIGHT_CONFIG } from '../midnight/config.js';
 
 interface WalletPanelProps {
   mode: WalletMode;
@@ -102,18 +101,8 @@ export function WalletPanel({
               </div>
             </div>
             <div>
-              <label className="text-sm text-[#cccccc]">Contract Address</label>
-              <div className="flex items-center gap-2 mt-1">
-                <code className="text-white font-mono text-xs bg-[#1a1a2e] px-3 py-1.5 rounded flex-1 truncate">
-                  {truncateAddress(MIDNIGHT_CONFIG.contractAddress)}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(MIDNIGHT_CONFIG.contractAddress)}
-                  className="text-[#0066ff] hover:text-[#0052cc] text-sm px-2 py-1.5 bg-[#1a1a2e] rounded"
-                >
-                  Copy
-                </button>
-              </div>
+              <label className="text-sm text-[#cccccc]">Contract</label>
+              <p className="text-white mt-1">Configured at runtime</p>
             </div>
           </div>
         </div>
