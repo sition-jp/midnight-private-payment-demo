@@ -11,6 +11,7 @@
     "build": "npx tsc --noEmit || true",
     "setup": "docker compose up -d && npm run compile:private && npm run deploy",
     "deploy": "npx tsx src/deploy.ts",
+    "connect-test": "npx tsx src/connect-test.ts",
     "deposit-test": "npx tsx src/deposit-test.ts",
     "transfer-test": "npx tsx src/transfer-test.ts",
     "full-test": "npx tsx src/full-test.ts",
