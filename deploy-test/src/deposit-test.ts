@@ -19,8 +19,8 @@ import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-pri
 import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 import { setNetworkId, getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { unshieldedToken } from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { unshieldedToken } from '@midnight-ntwrk/ledger-v8';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
@@ -36,8 +36,8 @@ globalThis.WebSocket = WebSocket;
 setNetworkId('preprod');
 
 const CONFIG = {
-  indexer: 'https://indexer.preprod.midnight.network/api/v3/graphql',
-  indexerWS: 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws',
+  indexer: 'https://indexer.preprod.midnight.network/api/v4/graphql',
+  indexerWS: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
   node: 'https://rpc.preprod.midnight.network',
   proofServer: 'http://127.0.0.1:6300',
 };
