@@ -21,7 +21,11 @@ import {
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { MIDNIGHT_CONFIG } from './config.js';
+import { runWalletSyncLifecycle } from './sync-timeout.js';
+import { readRequiredWalletState } from './wallet-readiness.js';
 import type { WalletContext } from '../types/index.js';
+
+const DEMO_WALLET_SYNC_TIMEOUT_MS = 90_000;
 
 // ─── Network Setup ───────────────────────────────────────────────────────────
 
@@ -96,8 +100,6 @@ async function createInternalWallet(seed: string): Promise<InternalDemoWallet> {
       ledger.LedgerParameters.initialParameters().dust,
     ),
   });
-  await wallet.start(shieldedSecretKeys, dustSecretKey);
-
   return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 }
 
@@ -108,8 +110,14 @@ async function createInternalWallet(seed: string): Promise<InternalDemoWallet> {
 export async function createWalletFromSeed(seed: string): Promise<WalletContext> {
   const internal = await createInternalWallet(seed.trim());
 
-  // Wait for initial sync
-  const state = await internal.wallet.waitForSyncedState();
+  const state = await runWalletSyncLifecycle({
+    start: () => internal.wallet.start(
+      internal.shieldedSecretKeys,
+      internal.dustSecretKey,
+    ),
+    waitForSyncedState: () => internal.wallet.waitForSyncedState(),
+    stop: () => internal.wallet.stop(),
+  }, DEMO_WALLET_SYNC_TIMEOUT_MS);
 
   const address = internal.unshieldedKeystore.getBech32Address().toString();
   const coinPublicKey = state.shielded.coinPublicKey.toHexString();
@@ -197,51 +205,13 @@ export async function connectLace(): Promise<WalletContext> {
   }
 
   const connectedWallet = await walletApi.connect('preprod');
-
-  // Get address
-  let address = '';
-  try {
-    if (typeof connectedWallet.getUnshieldedAddress === 'function') {
-      const addrResult = await connectedWallet.getUnshieldedAddress();
-      address = String(addrResult?.unshieldedAddress ?? addrResult ?? '');
-    }
-  } catch {
-    address = 'unknown';
-  }
-
-  // Get balance — 1AM returns { "0000...0000": "1000000000" }
-  const NATIVE_TOKEN = '0'.repeat(64);
-  let balance = 0n;
-  try {
-    if (typeof connectedWallet.getUnshieldedBalances === 'function') {
-      const balances = await connectedWallet.getUnshieldedBalances();
-      if (balances && typeof balances === 'object') {
-        const raw = balances[NATIVE_TOKEN] ?? balances.totalBalance ?? '0';
-        balance = BigInt(raw);
-      }
-    }
-  } catch {
-    balance = 0n;
-  }
-
-  // Get shielded keys for coin/encryption public keys
-  let coinPublicKey = '';
-  let encryptionPublicKey = '';
-  try {
-    if (typeof connectedWallet.getShieldedAddresses === 'function') {
-      const shielded = await connectedWallet.getShieldedAddresses();
-      coinPublicKey = String(shielded?.shieldedCoinPublicKey ?? '');
-      encryptionPublicKey = String(shielded?.shieldedEncryptionPublicKey ?? '');
-    }
-  } catch {
-    // Non-fatal — keys may not be needed for all operations
-  }
+  const walletState = await readRequiredWalletState(connectedWallet);
 
   return {
     mode: 'lace',
-    address,
-    coinPublicKey,
-    encryptionPublicKey,
+    address: walletState.address,
+    coinPublicKey: walletState.coinPublicKey,
+    encryptionPublicKey: walletState.encryptionPublicKey,
     balanceTx: async (tx: unknown) => {
       if (typeof tx !== 'string') {
         throw new Error('Wallet connector transactions must be serialized before balancing');
@@ -258,16 +228,7 @@ export async function connectLace(): Promise<WalletContext> {
     stop: async () => {
       // Extension wallets don't need cleanup
     },
-    getBalance: async () => {
-      try {
-        const balances = await connectedWallet.getUnshieldedBalances();
-        if (balances && typeof balances === 'object') {
-          const raw = balances[NATIVE_TOKEN] ?? balances.totalBalance ?? '0';
-          return BigInt(raw);
-        }
-      } catch { /* */ }
-      return balance;
-    },
+    getBalance: async () => (await readRequiredWalletState(connectedWallet)).balance,
     rawWalletApi: connectedWallet,
   };
 }
