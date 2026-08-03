@@ -1,6 +1,7 @@
 import type { WalletMode, WalletContext } from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
 import type { ContractContext } from '../types/index.js';
+import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
 
 interface WalletPanelProps {
   mode: WalletMode;
@@ -13,6 +14,8 @@ interface WalletPanelProps {
   walletContext: WalletContext | null;
   contract: ContractContext | null;
   isConnectingWallet: boolean;
+  syncProgress: WalletSyncProgressSnapshot | null;
+  syncElapsedMs: number;
   isConnectingContract: boolean;
   walletBalance: bigint | null;
   walletError: string | null;
@@ -41,6 +44,13 @@ function formatBalance(bal: bigint): string {
   return `${whole.toLocaleString()}.${fracStr}`;
 }
 
+function formatElapsed(elapsedMs: number): string {
+  const totalSeconds = Math.floor(elapsedMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function WalletPanel({
   mode,
   seed,
@@ -52,6 +62,8 @@ export function WalletPanel({
   walletContext,
   contract,
   isConnectingWallet,
+  syncProgress,
+  syncElapsedMs,
   isConnectingContract,
   walletBalance,
   walletError,
@@ -177,6 +189,40 @@ export function WalletPanel({
               {isConnectingWallet ? 'Connecting & Syncing...' : 'Connect'}
             </button>
           </div>
+          {isConnectingWallet && (
+            <div
+              className="bg-[#1a1a2e] border border-[#333] rounded p-4 space-y-2"
+              aria-live="polite"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium text-white">Synchronizing Preprod wallet</p>
+                <span className="text-xs font-mono text-[#cccccc]">
+                  {formatElapsed(syncElapsedMs)}
+                </span>
+              </div>
+              <p className="text-xs text-[#888]">
+                Shielded sync scans chain events to discover private state. Applied progress must reach the exact tip.
+              </p>
+              {syncProgress ? (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs font-mono">
+                  <dt className="text-[#888]">Shielded</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.shielded.current.toString()} / {syncProgress.shielded.total.toString()}
+                  </dd>
+                  <dt className="text-[#888]">Unshielded</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.unshielded.current.toString()} / {syncProgress.unshielded.total.toString()}
+                  </dd>
+                  <dt className="text-[#888]">DUST</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.dust.current.toString()} / {syncProgress.dust.total.toString()}
+                  </dd>
+                </dl>
+              ) : (
+                <p className="text-xs font-mono text-[#888]">Starting wallet services...</p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

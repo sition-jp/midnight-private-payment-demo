@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { WalletMode, WalletContext } from '../types/index.js';
+import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
 import {
   generateSeed,
   createWalletFromSeed,
@@ -17,6 +18,8 @@ export interface UseWalletReturn {
   disconnect: () => Promise<void>;
   walletContext: WalletContext | null;
   isConnecting: boolean;
+  syncProgress: WalletSyncProgressSnapshot | null;
+  syncElapsedMs: number;
   balance: bigint | null;
   error: string | null;
   laceAvailable: boolean;
@@ -27,10 +30,21 @@ export function useWallet(): UseWalletReturn {
   const [seed, setSeed] = useState('');
   const [walletContext, setWalletContext] = useState<WalletContext | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<WalletSyncProgressSnapshot | null>(null);
+  const [syncStartedAt, setSyncStartedAt] = useState<number | null>(null);
+  const [syncElapsedMs, setSyncElapsedMs] = useState(0);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const laceAvailable = isLaceAvailable();
+
+  useEffect(() => {
+    if (!isConnecting || mode !== 'demo' || syncStartedAt === null) return undefined;
+    const updateElapsed = () => setSyncElapsedMs(Date.now() - syncStartedAt);
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1_000);
+    return () => clearInterval(interval);
+  }, [isConnecting, mode, syncStartedAt]);
 
   const generateRandomSeed = useCallback(() => {
     setSeed(generateSeed());
@@ -39,13 +53,18 @@ export function useWallet(): UseWalletReturn {
   const connect = useCallback(async () => {
     setIsConnecting(true);
     setError(null);
+    setSyncProgress(null);
+    setSyncElapsedMs(0);
+    setSyncStartedAt(mode === 'demo' ? Date.now() : null);
     try {
       let ctx: WalletContext;
       if (mode === 'demo') {
         if (!seed || seed.length !== 64) {
           throw new Error('Please provide a valid 64-character hex seed');
         }
-        ctx = await createWalletFromSeed(seed);
+        ctx = await createWalletFromSeed(seed, {
+          onProgress: setSyncProgress,
+        });
       } else {
         ctx = await connectLace();
       }
@@ -56,6 +75,7 @@ export function useWallet(): UseWalletReturn {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsConnecting(false);
+      setSyncStartedAt(null);
     }
   }, [mode, seed]);
 
@@ -65,6 +85,8 @@ export function useWallet(): UseWalletReturn {
       setWalletContext(null);
       setBalance(null);
       setError(null);
+      setSyncProgress(null);
+      setSyncElapsedMs(0);
     }
   }, [walletContext]);
 
@@ -78,6 +100,8 @@ export function useWallet(): UseWalletReturn {
     disconnect,
     walletContext,
     isConnecting,
+    syncProgress,
+    syncElapsedMs,
     balance,
     error,
     laceAvailable,

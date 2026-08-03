@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { WalletSyncTimeoutError, withWalletSyncTimeout } from './sync-timeout.ts';
 
+function progress(current: bigint, total: bigint) {
+  return {
+    shielded: { current, total, isConnected: true },
+    unshielded: { current: 10n, total: 10n, isConnected: true },
+    dust: { current: 20n, total: 20n, isConnected: true },
+  };
+}
+
 test('wallet sync operations fail with a stage-specific timeout instead of waiting forever', async () => {
   const neverCompletes = new Promise<never>(() => {});
 
@@ -95,4 +103,133 @@ test('wallet lifecycle reports cleanup failure without hiding the original failu
       return true;
     },
   );
+});
+
+test('wallet lifecycle keeps waiting while applied positions continue to advance', async () => {
+  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+  let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
+  let resolveSynced: ((value: string) => void) | undefined;
+  const synced = new Promise<string>((resolve) => {
+    resolveSynced = resolve;
+  });
+  const observed: ReturnType<typeof progress>[] = [];
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => synced,
+    stop: async () => undefined,
+    subscribeProgress: (next) => {
+      listener = next;
+      next(progress(0n, 5n));
+      return () => {
+        listener = undefined;
+      };
+    },
+  }, {
+    idleTimeoutMs: 40,
+    absoluteTimeoutMs: 250,
+    onProgress: (value) => observed.push(value),
+  });
+
+  setTimeout(() => listener?.(progress(1n, 5n)), 15);
+  setTimeout(() => listener?.(progress(2n, 5n)), 45);
+  setTimeout(() => listener?.(progress(3n, 5n)), 75);
+  setTimeout(() => resolveSynced?.('ready'), 95);
+
+  assert.equal(await operation, 'ready');
+  assert.equal(observed.at(-1)?.shielded.current, 3n);
+  assert.equal(listener, undefined, 'progress subscription should be released');
+});
+
+test('wallet lifecycle treats total-only movement as stalled applied progress', async () => {
+  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+  let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => new Promise<never>(() => {}),
+    stop: async () => undefined,
+    subscribeProgress: (next) => {
+      listener = next;
+      next(progress(7n, 10n));
+      return () => {
+        listener = undefined;
+      };
+    },
+  }, {
+    idleTimeoutMs: 40,
+    absoluteTimeoutMs: 250,
+  });
+
+  setTimeout(() => listener?.(progress(7n, 11n)), 15);
+  setTimeout(() => listener?.(progress(7n, 12n)), 30);
+
+  await assert.rejects(operation, (error: unknown) => {
+    assert.ok(error instanceof WalletSyncTimeoutError);
+    assert.equal(error.reason, 'idle');
+    assert.match(error.message, /no applied progress/i);
+    return true;
+  });
+});
+
+test('wallet lifecycle does not treat an applied-position rollback as progress', async () => {
+  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+  let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
+  const startedAt = Date.now();
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => new Promise<never>(() => {}),
+    stop: async () => undefined,
+    subscribeProgress: (next) => {
+      listener = next;
+      next(progress(7n, 10n));
+      return () => {
+        listener = undefined;
+      };
+    },
+  }, {
+    idleTimeoutMs: 60,
+    absoluteTimeoutMs: 250,
+  });
+
+  setTimeout(() => listener?.(progress(6n, 10n)), 45);
+
+  await assert.rejects(operation, (error: unknown) => {
+    assert.ok(error instanceof WalletSyncTimeoutError);
+    assert.equal(error.reason, 'idle');
+    assert.ok(Date.now() - startedAt < 85, 'rollback must not extend the idle deadline');
+    return true;
+  });
+});
+
+test('wallet lifecycle enforces an absolute limit even while progress advances', async () => {
+  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+  let current = 0n;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => new Promise<never>(() => {}),
+    stop: async () => undefined,
+    subscribeProgress: (next) => {
+      timer = setInterval(() => {
+        current += 1n;
+        next(progress(current, 100n));
+      }, 10);
+      return () => {
+        if (timer !== undefined) clearInterval(timer);
+      };
+    },
+  }, {
+    idleTimeoutMs: 30,
+    absoluteTimeoutMs: 75,
+  });
+
+  await assert.rejects(operation, (error: unknown) => {
+    assert.ok(error instanceof WalletSyncTimeoutError);
+    assert.equal(error.reason, 'absolute');
+    assert.match(error.message, /absolute limit/i);
+    return true;
+  });
 });

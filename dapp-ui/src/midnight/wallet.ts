@@ -21,11 +21,36 @@ import {
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { MIDNIGHT_CONFIG } from './config.js';
-import { runWalletSyncLifecycle } from './sync-timeout.js';
-import { readRequiredWalletState } from './wallet-readiness.js';
+import {
+  runWalletSyncLifecycle,
+  WalletSyncTimeoutError,
+  type WalletSyncProgressSnapshot,
+} from './sync-timeout.js';
+import {
+  isWalletSyncProgressStrictlyReady,
+  readRequiredWalletState,
+} from './wallet-readiness.js';
+import {
+  buildDemoWalletStateKey,
+  createIndexedDbDemoWalletStateStorage,
+  loadDemoWalletState,
+  runWithDemoWalletStateFallback,
+  saveDemoWalletState,
+  type DemoWalletStateStorage,
+  type PersistedDemoWalletState,
+} from './demo-wallet-persistence.js';
 import type { WalletContext } from '../types/index.js';
 
-const DEMO_WALLET_SYNC_TIMEOUT_MS = 90_000;
+const DEMO_WALLET_IDLE_TIMEOUT_MS = 60_000;
+const DEMO_WALLET_ABSOLUTE_TIMEOUT_MS = 45 * 60_000;
+const DEMO_WALLET_SDK_VERSION = [
+  'midnight-js-protocol-4.1.1',
+  'wallet-facade-4.0.1',
+  'shielded-3.0.1',
+  'unshielded-3.1.0',
+  'dust-4.1.0',
+  'ledger-v8-8.1.0',
+].join('|');
 
 // ─── Network Setup ───────────────────────────────────────────────────────────
 
@@ -66,7 +91,40 @@ interface InternalDemoWallet {
   unshieldedKeystore: ReturnType<typeof createKeystore>;
 }
 
-async function createInternalWallet(seed: string): Promise<InternalDemoWallet> {
+export interface DemoWalletSyncOptions {
+  readonly idleTimeoutMs?: number;
+  readonly absoluteTimeoutMs?: number;
+  readonly onProgress?: (progress: WalletSyncProgressSnapshot) => void;
+}
+
+function readWalletSyncProgress(
+  state: ReturnType<WalletFacade['state']> extends import('rxjs').Observable<infer T>
+    ? T
+    : never,
+): WalletSyncProgressSnapshot {
+  return {
+    shielded: {
+      current: state.shielded.progress.appliedIndex,
+      total: state.shielded.progress.highestRelevantWalletIndex,
+      isConnected: state.shielded.progress.isConnected,
+    },
+    unshielded: {
+      current: state.unshielded.progress.appliedId,
+      total: state.unshielded.progress.highestTransactionId,
+      isConnected: state.unshielded.progress.isConnected,
+    },
+    dust: {
+      current: state.dust.progress.appliedIndex,
+      total: state.dust.progress.highestRelevantWalletIndex,
+      isConnected: state.dust.progress.isConnected,
+    },
+  };
+}
+
+async function createInternalWallet(
+  seed: string,
+  restoredState: PersistedDemoWalletState | null,
+): Promise<InternalDemoWallet> {
   ensureNetworkId();
   const keys = deriveKeys(seed);
   const networkId = getNetworkId();
@@ -91,33 +149,163 @@ async function createInternalWallet(seed: string): Promise<InternalDemoWallet> {
 
   const wallet = await WalletFacade.init({
     configuration: walletConfig,
-    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
-    unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(
-      PublicKey.fromKeyStore(unshieldedKeystore),
-    ),
-    dust: (config) => DustWallet(config).startWithSecretKey(
-      dustSecretKey,
-      ledger.LedgerParameters.initialParameters().dust,
-    ),
+    shielded: (config) => {
+      const walletClass = ShieldedWallet(config);
+      return restoredState
+        ? walletClass.restore(restoredState.shielded)
+        : walletClass.startWithSecretKeys(shieldedSecretKeys);
+    },
+    unshielded: (config) => {
+      const walletClass = UnshieldedWallet(config);
+      return restoredState
+        ? walletClass.restore(restoredState.unshielded)
+        : walletClass.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+    },
+    dust: (config) => {
+      const walletClass = DustWallet(config);
+      return restoredState
+        ? walletClass.restore(restoredState.dust)
+        : walletClass.startWithSecretKey(
+          dustSecretKey,
+          ledger.LedgerParameters.initialParameters().dust,
+        );
+    },
   });
   return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 }
 
-/**
- * Create a demo-mode wallet from a hex seed.
- * Syncs with the network before returning.
- */
-export async function createWalletFromSeed(seed: string): Promise<WalletContext> {
-  const internal = await createInternalWallet(seed.trim());
+interface SynchronizedDemoWallet {
+  readonly internal: InternalDemoWallet;
+  readonly state: Awaited<ReturnType<WalletFacade['waitForSyncedState']>>;
+  readonly restored: boolean;
+}
+
+async function synchronizeDemoWallet(
+  seed: string,
+  restoredState: PersistedDemoWalletState | null,
+  options: DemoWalletSyncOptions,
+): Promise<SynchronizedDemoWallet> {
+  let internal: InternalDemoWallet;
+  try {
+    internal = await createInternalWallet(seed, restoredState);
+  } catch (error) {
+    if (restoredState) {
+      throw new Error('Unable to restore serialized demo wallet state', { cause: error });
+    }
+    throw error;
+  }
 
   const state = await runWalletSyncLifecycle({
     start: () => internal.wallet.start(
       internal.shieldedSecretKeys,
       internal.dustSecretKey,
     ),
-    waitForSyncedState: () => internal.wallet.waitForSyncedState(),
+    waitForSyncedState: async () => {
+      const syncedState = await internal.wallet.waitForSyncedState();
+      if (!isWalletSyncProgressStrictlyReady(readWalletSyncProgress(syncedState))) {
+        throw new Error('Wallet SDK returned before strict synchronization completed');
+      }
+      return syncedState;
+    },
     stop: () => internal.wallet.stop(),
-  }, DEMO_WALLET_SYNC_TIMEOUT_MS);
+    subscribeProgress: (listener) => {
+      const subscription = internal.wallet.state().subscribe((walletState) => {
+        listener(readWalletSyncProgress(walletState));
+      });
+      return () => subscription.unsubscribe();
+    },
+  }, {
+    idleTimeoutMs: options.idleTimeoutMs ?? DEMO_WALLET_IDLE_TIMEOUT_MS,
+    absoluteTimeoutMs: options.absoluteTimeoutMs ?? DEMO_WALLET_ABSOLUTE_TIMEOUT_MS,
+    onProgress: options.onProgress,
+  });
+
+  return { internal, state, restored: restoredState !== null };
+}
+
+function shouldDiscardRestoredWalletState(error: unknown): boolean {
+  if (error instanceof WalletSyncTimeoutError) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return /serializ|wallet state|non-linear|nonlinearly|expected to insert index|protocol version/i
+    .test(message);
+}
+
+async function persistDemoWalletState(
+  storage: DemoWalletStateStorage | null,
+  cacheKey: string | null,
+  internal: InternalDemoWallet,
+): Promise<void> {
+  if (!storage || !cacheKey) return;
+  const [shielded, unshielded, dust] = await Promise.all([
+    internal.wallet.shielded.serializeState(),
+    internal.wallet.unshielded.serializeState(),
+    internal.wallet.dust.serializeState(),
+  ]);
+  await saveDemoWalletState(storage, cacheKey, {
+    schemaVersion: 1,
+    networkId: getNetworkId(),
+    sdkVersion: DEMO_WALLET_SDK_VERSION,
+    savedAt: Date.now(),
+    shielded,
+    unshielded,
+    dust,
+  });
+}
+
+async function loadDemoWalletCache(seed: string): Promise<{
+  readonly storage: DemoWalletStateStorage | null;
+  readonly cacheKey: string | null;
+  readonly state: PersistedDemoWalletState | null;
+}> {
+  const storage = createIndexedDbDemoWalletStateStorage();
+  if (!storage) return { storage: null, cacheKey: null, state: null };
+  try {
+    const networkId = getNetworkId();
+    const cacheKey = await buildDemoWalletStateKey(seed, networkId, DEMO_WALLET_SDK_VERSION);
+    const state = await loadDemoWalletState(
+      storage,
+      cacheKey,
+      networkId,
+      DEMO_WALLET_SDK_VERSION,
+    );
+    return { storage, cacheKey, state };
+  } catch {
+    console.warn('[Wallet] Demo wallet cache is unavailable; continuing with chain sync');
+    return { storage: null, cacheKey: null, state: null };
+  }
+}
+
+/**
+ * Create a demo-mode wallet from a hex seed.
+ * Syncs with the network before returning.
+ */
+export async function createWalletFromSeed(
+  seed: string,
+  options: DemoWalletSyncOptions = {},
+): Promise<WalletContext> {
+  const normalizedSeed = seed.trim();
+  ensureNetworkId();
+  const cache = await loadDemoWalletCache(normalizedSeed);
+  const startedAt = Date.now();
+  const synchronized = await runWithDemoWalletStateFallback({
+    cachedState: cache.state,
+    clearCachedState: async () => {
+      if (cache.storage && cache.cacheKey) await cache.storage.delete(cache.cacheKey);
+    },
+    run: (restoredState) => synchronizeDemoWallet(normalizedSeed, restoredState, options),
+    shouldDiscardCachedState: shouldDiscardRestoredWalletState,
+  });
+  const { internal, state } = synchronized;
+
+  try {
+    await persistDemoWalletState(cache.storage, cache.cacheKey, internal);
+  } catch {
+    console.warn('[Wallet] Demo wallet state could not be cached; synchronization remains valid');
+  }
+  console.info(
+    `[Wallet] Demo wallet synchronized from ${synchronized.restored ? 'cached state' : 'chain replay'} `
+    + `in ${Date.now() - startedAt} ms`,
+  );
 
   const address = internal.unshieldedKeystore.getBech32Address().toString();
   const coinPublicKey = state.shielded.coinPublicKey.toHexString();
@@ -154,12 +342,19 @@ export async function createWalletFromSeed(seed: string): Promise<WalletContext>
     encryptionPublicKey,
     balanceTx: walletProvider.balanceTx,
     submitTx: walletProvider.submitTx,
-    stop: () => internal.wallet.stop(),
+    stop: async () => {
+      try {
+        await persistDemoWalletState(cache.storage, cache.cacheKey, internal);
+      } catch {
+        console.warn('[Wallet] Demo wallet state could not be cached during disconnect');
+      } finally {
+        await internal.wallet.stop();
+      }
+    },
     getBalance: async () => {
       const s = await internal.wallet.waitForSyncedState();
       return s.unshielded.balances[unshieldedToken().raw] ?? 0n;
     },
-    seed,
   };
 }
 

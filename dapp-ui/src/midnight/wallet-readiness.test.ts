@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readRequiredWalletState } from './wallet-readiness.ts';
+import {
+  isWalletSyncProgressStrictlyReady,
+  readRequiredWalletState,
+} from './wallet-readiness.ts';
 
 test('wallet authorization is not ready when a required state read fails', async () => {
   const nativeToken = '0'.repeat(64);
@@ -148,4 +151,28 @@ test('wallet authorization rejects non-string shielded keys', async () => {
     }),
     /required wallet state is unavailable/i,
   );
+});
+
+test('wallet sync readiness requires every wallet to be connected at exact gap zero', () => {
+  assert.equal(isWalletSyncProgressStrictlyReady({
+    shielded: { current: 100n, total: 100n, isConnected: true },
+    unshielded: { current: 50n, total: 50n, isConnected: true },
+    dust: { current: 75n, total: 75n, isConnected: true },
+  }), true);
+});
+
+test('wallet sync readiness rejects an allowed-looking gap of one', () => {
+  assert.equal(isWalletSyncProgressStrictlyReady({
+    shielded: { current: 99n, total: 100n, isConnected: true },
+    unshielded: { current: 50n, total: 50n, isConnected: true },
+    dust: { current: 75n, total: 75n, isConnected: true },
+  }), false);
+});
+
+test('wallet sync readiness rejects exact counters without a live connection', () => {
+  assert.equal(isWalletSyncProgressStrictlyReady({
+    shielded: { current: 100n, total: 100n, isConnected: false },
+    unshielded: { current: 50n, total: 50n, isConnected: true },
+    dust: { current: 75n, total: 75n, isConnected: true },
+  }), false);
 });

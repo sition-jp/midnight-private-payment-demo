@@ -115,6 +115,8 @@ function App() {
             walletContext={wallet.walletContext}
             contract={contractHook.contract}
             isConnectingWallet={wallet.isConnecting}
+            syncProgress={wallet.syncProgress}
+            syncElapsedMs={wallet.syncElapsedMs}
             isConnectingContract={contractHook.isConnecting}
             walletBalance={wallet.balance}
             walletError={wallet.error}

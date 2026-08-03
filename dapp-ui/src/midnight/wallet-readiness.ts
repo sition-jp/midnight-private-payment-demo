@@ -1,5 +1,24 @@
 const NATIVE_TOKEN = '0'.repeat(64);
 
+export interface StrictWalletSyncCounter {
+  readonly current: bigint;
+  readonly total: bigint;
+  readonly isConnected: boolean;
+}
+
+export interface StrictWalletSyncProgress {
+  readonly shielded: StrictWalletSyncCounter;
+  readonly unshielded: StrictWalletSyncCounter;
+  readonly dust: StrictWalletSyncCounter;
+}
+
+export function isWalletSyncProgressStrictlyReady(
+  progress: StrictWalletSyncProgress,
+): boolean {
+  return [progress.shielded, progress.unshielded, progress.dust]
+    .every((wallet) => wallet.isConnected && wallet.current === wallet.total);
+}
+
 export interface WalletStateReader {
   getUnshieldedAddress?: () => Promise<unknown>;
   getUnshieldedBalances?: () => Promise<unknown>;
