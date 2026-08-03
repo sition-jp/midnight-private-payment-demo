@@ -23,6 +23,7 @@ import {
 import { fromHex, toHex } from '@midnight-ntwrk/midnight-js-utils';
 
 import { MIDNIGHT_CONFIG } from './config.js';
+import { extractCircuitResult } from './contract-result.js';
 import { inMemoryPrivateStateProvider } from '../providers/InMemoryPrivateStateProvider.js';
 import {
   createWitnesses,
@@ -233,9 +234,10 @@ export async function connectToContract(
 
     async checkBalance(): Promise<TransactionResult> {
       const result = await contract.callTx.check_balance();
-      const r = result as Record<string, unknown> | undefined;
-      const pub = r?.public as Record<string, unknown> | undefined;
-      const balance = pub?.result ?? (r as Record<string, unknown> | undefined)?.result;
+      // The contract discloses this value, but midnight-js wraps all JS circuit
+      // return values in the generic privacy-sensitive `private.result` envelope.
+      // Extract only the value; never log or persist the surrounding object.
+      const balance = extractCircuitResult(result);
       const txResult = makeTransactionResult(result);
       return { ...txResult, result: balance };
     },

@@ -10,13 +10,6 @@ interface BalancePanelProps {
   transactions: TransactionResult[];
 }
 
-function txTypeLabel(tx: TransactionResult): string {
-  const hash = tx.txHash;
-  // Simple heuristic: we can't reliably determine type from the result alone,
-  // so we show the hash and status
-  return hash === 'unknown' ? 'Operation' : `Tx ${hash.slice(0, 8)}...`;
-}
-
 export function BalancePanel({
   contract,
   onCheckBalance,
@@ -68,7 +61,7 @@ export function BalancePanel({
               >
                 <div className="flex items-center gap-2">
                   <span>{tx.status === 'confirmed' ? '✅' : '❌'}</span>
-                  <span className="text-white font-mono">{txTypeLabel(tx)}</span>
+                  <span className="text-white">Confirmed operation</span>
                 </div>
                 <a
                   href={tx.explorerUrl}

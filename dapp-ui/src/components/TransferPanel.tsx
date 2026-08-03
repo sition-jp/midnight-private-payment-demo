@@ -84,10 +84,11 @@ export function TransferPanel({
               Recipient (64-char hex public key)
             </label>
             <input
-              type="text"
+              type="password"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               placeholder="Enter 64-character hex recipient..."
+              autoComplete="off"
               className="w-full bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
               maxLength={64}
             />

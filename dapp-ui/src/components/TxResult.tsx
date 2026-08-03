@@ -6,17 +6,6 @@ interface TxResultProps {
   currentTx?: CurrentTx | null;
 }
 
-function truncateHash(hash: string): string {
-  if (hash.length <= 16) return hash;
-  return `${hash.slice(0, 8)}...${hash.slice(-8)}`;
-}
-
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).catch(() => {
-    // fallback: ignore
-  });
-}
-
 function statusIcon(status: string): string {
   if (status === 'pending') return '⏳';
   if (status === 'confirmed') return '✅';
@@ -76,16 +65,6 @@ export function TxResult({ tx, currentTx }: TxResultProps) {
           <p className="text-white font-medium flex-1">Transaction Confirmed</p>
         </div>
         <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-[#cccccc]">Tx Hash:</span>
-            <code className="text-white font-mono">{truncateHash(tx.txHash)}</code>
-            <button
-              onClick={() => copyToClipboard(tx.txHash)}
-              className="text-[#0066ff] hover:text-[#0052cc] text-xs"
-            >
-              Copy
-            </button>
-          </div>
           <div>
             <a
               href={tx.explorerUrl}

@@ -10,13 +10,19 @@ test('workshop UI states the exact disclosure boundary', () => {
   const depositPanel = read('../components/DepositPanel.tsx');
   const transferPanel = read('../components/TransferPanel.tsx');
   const balancePanel = read('../components/BalancePanel.tsx');
+  const header = read('../components/Header.tsx');
+  const txResult = read('../components/TxResult.tsx');
 
   assert.match(depositPanel, /deposit amount is public/i);
   assert.match(depositPanel, /balance value remains hidden/i);
   assert.match(transferPanel, /amount is hidden; sender and\s+recipient public keys remain visible on-chain/i);
   assert.match(transferPanel, /not a complete\s+two-party payment/i);
+  assert.match(transferPanel, /type="password"/);
   assert.match(balancePanel, /check_balance publicly discloses the\s+returned balance/i);
   assert.doesNotMatch(balancePanel, /Query your private balance/i);
+  assert.doesNotMatch(balancePanel, /hash\.slice/);
+  assert.match(header, /walletContext\.mode === 'demo'\s*\? 'Demo connected'/);
+  assert.doesNotMatch(txResult, /Tx Hash:/);
 });
 
 test('workshop script does not claim recipient anonymity or complete payment delivery', () => {
