@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   buildDemoWalletStateKey,
+  DEMO_WALLET_SDK_VERSION,
   loadDemoWalletState,
   runWithDemoWalletStateFallback,
   saveDemoWalletState,
@@ -13,6 +15,28 @@ import { isIdleWalletSyncTimeout, WalletSyncTimeoutError } from './sync-timeout.
 const NETWORK_ID = 'preprod';
 const SDK_VERSION = 'wallet-sdk-test-v1';
 const SEED = 'ab'.repeat(32);
+
+test('demo wallet cache fingerprint matches installed SDK versions', () => {
+  const packageLock = JSON.parse(
+    readFileSync(new URL('../../package-lock.json', import.meta.url), 'utf8'),
+  ) as { packages: Record<string, { version?: string }> };
+  const installedVersion = (packageName: string) => {
+    const version = packageLock.packages[`node_modules/${packageName}`]?.version;
+    assert.ok(version, `${packageName} must exist in package-lock.json`);
+    return version;
+  };
+
+  const expected = [
+    `midnight-js-protocol-${installedVersion('@midnight-ntwrk/midnight-js-protocol')}`,
+    `wallet-facade-${installedVersion('@midnight-ntwrk/wallet-sdk-facade')}`,
+    `shielded-${installedVersion('@midnight-ntwrk/wallet-sdk-shielded')}`,
+    `unshielded-${installedVersion('@midnight-ntwrk/wallet-sdk-unshielded-wallet')}`,
+    `dust-${installedVersion('@midnight-ntwrk/wallet-sdk-dust-wallet')}`,
+    `ledger-v8-${installedVersion('@midnight-ntwrk/ledger-v8')}`,
+  ].join('|');
+
+  assert.equal(DEMO_WALLET_SDK_VERSION, expected);
+});
 
 function validState(): PersistedDemoWalletState {
   return {
@@ -55,6 +79,17 @@ test('demo wallet cache keys partition state without exposing the raw seed', asy
   assert.notEqual(key, otherNetworkKey);
   assert.notEqual(key, otherSdkKey);
   assert.equal(key, await buildDemoWalletStateKey(SEED, NETWORK_ID, SDK_VERSION));
+});
+
+test('demo wallet cache keys reject malformed seeds', async () => {
+  await assert.rejects(
+    buildDemoWalletStateKey('ab'.repeat(31), NETWORK_ID, SDK_VERSION),
+    /64-character hexadecimal/i,
+  );
+  await assert.rejects(
+    buildDemoWalletStateKey('zz'.repeat(32), NETWORK_ID, SDK_VERSION),
+    /64-character hexadecimal/i,
+  );
 });
 
 test('invalid cached wallet state is discarded before a restore is attempted', async () => {

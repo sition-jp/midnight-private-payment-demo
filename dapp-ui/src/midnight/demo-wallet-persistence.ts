@@ -8,11 +8,22 @@ export interface PersistedDemoWalletState {
   readonly dust: string;
 }
 
+// This local cache is only for disposable workshop demo seeds; never reuse a real wallet seed.
+
 export interface DemoWalletStateStorage {
   get(key: string): Promise<unknown>;
   set(key: string, value: PersistedDemoWalletState): Promise<void>;
   delete(key: string): Promise<void>;
 }
+
+export const DEMO_WALLET_SDK_VERSION = [
+  'midnight-js-protocol-4.1.1',
+  'wallet-facade-4.0.1',
+  'shielded-3.0.1',
+  'unshielded-3.1.0',
+  'dust-4.1.0',
+  'ledger-v8-8.1.0',
+].join('|');
 
 const CACHE_KEY_PREFIX = 'midnight-demo-v2:wallet-state:v1';
 const CACHE_KEY_DOMAIN = 'midnight-demo-v2:demo-wallet-cache-key:v1';

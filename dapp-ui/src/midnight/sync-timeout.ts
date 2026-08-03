@@ -16,6 +16,7 @@ export interface WalletSyncProgressSnapshot {
 export interface WalletSyncTimeoutOptions {
   readonly idleTimeoutMs: number;
   readonly absoluteTimeoutMs: number;
+  readonly progressReportIntervalMs?: number;
   readonly onProgress?: (progress: WalletSyncProgressSnapshot) => void;
 }
 
@@ -72,6 +73,7 @@ export interface WalletSyncLifecycle<T> {
   stop: () => Promise<void>;
   subscribeProgress?: (
     listener: (progress: WalletSyncProgressSnapshot) => void,
+    onError: (error: unknown) => void,
   ) => () => void;
 }
 
@@ -120,13 +122,19 @@ export async function runWalletSyncLifecycle<T>(
 ): Promise<T> {
   const options = normalizeTimeoutOptions(timeoutOptions);
   let deadlineExceeded = false;
+  let startupCompleted = false;
   let timeoutError: WalletSyncTimeoutError | undefined;
   let idleTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let rejectDeadline: ((error: WalletSyncTimeoutError) => void) | undefined;
+  let rejectProgressFailure: ((error: Error) => void) | undefined;
   let highestAppliedPositions: readonly bigint[] | undefined;
+  let lastProgressReportedAt: number | undefined;
 
   const deadline = new Promise<never>((_resolve, reject) => {
     rejectDeadline = reject;
+  });
+  const progressFailure = new Promise<never>((_resolve, reject) => {
+    rejectProgressFailure = reject;
   });
 
   const failForTimeout = (reason: WalletSyncTimeoutReason, timeoutMs: number) => {
@@ -150,29 +158,51 @@ export async function runWalletSyncLifecycle<T>(
   );
   scheduleIdleTimeout();
 
-  const unsubscribeProgress = lifecycle.subscribeProgress?.((progress) => {
-    options.onProgress?.(progress);
-    const nextAppliedPositions = appliedPositions(progress);
-    const advanced = positionsAdvanced(highestAppliedPositions, nextAppliedPositions);
-    highestAppliedPositions = updateHighWaterMarks(
-      highestAppliedPositions,
-      nextAppliedPositions,
+  let unsubscribeProgress: (() => void) | undefined;
+  try {
+    unsubscribeProgress = lifecycle.subscribeProgress?.(
+      (progress) => {
+        const now = Date.now();
+        const reportInterval = options.progressReportIntervalMs ?? 0;
+        if (
+          lastProgressReportedAt === undefined
+          || reportInterval <= 0
+          || now - lastProgressReportedAt >= reportInterval
+        ) {
+          options.onProgress?.(progress);
+          lastProgressReportedAt = now;
+        }
+        const nextAppliedPositions = appliedPositions(progress);
+        const advanced = positionsAdvanced(highestAppliedPositions, nextAppliedPositions);
+        highestAppliedPositions = updateHighWaterMarks(
+          highestAppliedPositions,
+          nextAppliedPositions,
+        );
+        if (advanced) {
+          scheduleIdleTimeout();
+        }
+      },
+      (error) => rejectProgressFailure?.(
+        error instanceof Error ? error : new Error('Wallet progress stream failed'),
+      ),
     );
-    if (advanced) {
-      scheduleIdleTimeout();
-    }
-  });
+  } catch (error) {
+    rejectProgressFailure(
+      error instanceof Error ? error : new Error('Wallet progress stream failed'),
+    );
+  }
 
   const operation = (async () => {
     await lifecycle.start();
+    startupCompleted = true;
     if (deadlineExceeded) throw timeoutError;
     return lifecycle.waitForSyncedState();
   })();
 
   try {
-    return await Promise.race([operation, deadline]);
+    return await Promise.race([operation, deadline, progressFailure]);
   } catch (error) {
-    if (deadlineExceeded) {
+    if (deadlineExceeded && !startupCompleted) {
       void operation
         .finally(async () => {
           try {

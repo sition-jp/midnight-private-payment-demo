@@ -34,6 +34,7 @@ import {
 import {
   buildDemoWalletStateKey,
   createIndexedDbDemoWalletStateStorage,
+  DEMO_WALLET_SDK_VERSION,
   loadDemoWalletState,
   runWithDemoWalletStateFallback,
   saveDemoWalletState,
@@ -44,14 +45,7 @@ import type { WalletContext } from '../types/index.js';
 
 const DEMO_WALLET_IDLE_TIMEOUT_MS = 60_000;
 const DEMO_WALLET_ABSOLUTE_TIMEOUT_MS = 45 * 60_000;
-const DEMO_WALLET_SDK_VERSION = [
-  'midnight-js-protocol-4.1.1',
-  'wallet-facade-4.0.1',
-  'shielded-3.0.1',
-  'unshielded-3.1.0',
-  'dust-4.1.0',
-  'ledger-v8-8.1.0',
-].join('|');
+const DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS = 250;
 
 // ─── Network Setup ───────────────────────────────────────────────────────────
 
@@ -209,15 +203,17 @@ async function synchronizeDemoWallet(
       return syncedState;
     },
     stop: () => internal.wallet.stop(),
-    subscribeProgress: (listener) => {
-      const subscription = internal.wallet.state().subscribe((walletState) => {
-        listener(readWalletSyncProgress(walletState));
+    subscribeProgress: (listener, onError) => {
+      const subscription = internal.wallet.state().subscribe({
+        next: (walletState) => listener(readWalletSyncProgress(walletState)),
+        error: onError,
       });
       return () => subscription.unsubscribe();
     },
   }, {
     idleTimeoutMs: options.idleTimeoutMs ?? DEMO_WALLET_IDLE_TIMEOUT_MS,
     absoluteTimeoutMs: options.absoluteTimeoutMs ?? DEMO_WALLET_ABSOLUTE_TIMEOUT_MS,
+    progressReportIntervalMs: DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS,
     onProgress: options.onProgress,
   });
 

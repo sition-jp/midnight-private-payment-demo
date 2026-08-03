@@ -92,6 +92,31 @@ test('a wallet that starts after timeout is stopped again without entering sync 
   assert.equal(stopCalls, 2);
 });
 
+test('a timeout after startup stops the active wallet only once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let rejectWait: ((error: Error) => void) | undefined;
+  let stopCalls = 0;
+  const waiting = new Promise<never>((_resolve, reject) => {
+    rejectWait = reject;
+  });
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => waiting,
+    stop: async () => {
+      stopCalls += 1;
+      rejectWait?.(new Error('wallet stopped'));
+    },
+  }, 20);
+
+  await Promise.resolve();
+  t.mock.timers.tick(20);
+
+  await assert.rejects(operation, WalletSyncTimeoutError);
+  await Promise.resolve();
+  assert.equal(stopCalls, 1);
+});
+
 test('wallet lifecycle reports cleanup failure without hiding the original failure', async () => {
   await assert.rejects(
     runWalletSyncLifecycle({
@@ -110,6 +135,27 @@ test('wallet lifecycle reports cleanup failure without hiding the original failu
       return true;
     },
   );
+});
+
+test('wallet lifecycle fails closed when the progress stream errors', async () => {
+  let stopCalls = 0;
+
+  await assert.rejects(
+    runWalletSyncLifecycle({
+      start: async () => undefined,
+      waitForSyncedState: () => new Promise<never>(() => {}),
+      stop: async () => {
+        stopCalls += 1;
+      },
+      subscribeProgress: (_next, onError) => {
+        onError(new Error('progress stream failed'));
+        return () => undefined;
+      },
+    }, 20),
+    /progress stream failed/,
+  );
+
+  assert.equal(stopCalls, 1);
 });
 
 test('wallet lifecycle keeps waiting while applied positions continue to advance', async (t) => {
@@ -149,6 +195,44 @@ test('wallet lifecycle keeps waiting while applied positions continue to advance
   assert.equal(await operation, 'ready');
   assert.equal(observed.at(-1)?.shielded.current, 3n);
   assert.equal(listener, undefined, 'progress subscription should be released');
+});
+
+test('wallet lifecycle throttles UI progress reports without throttling sync progress', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
+  let resolveSynced: ((value: string) => void) | undefined;
+  const synced = new Promise<string>((resolve) => {
+    resolveSynced = resolve;
+  });
+  const observed: ReturnType<typeof progress>[] = [];
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => synced,
+    stop: async () => undefined,
+    subscribeProgress: (next) => {
+      listener = next;
+      next(progress(0n, 5n));
+      return () => {
+        listener = undefined;
+      };
+    },
+  }, {
+    idleTimeoutMs: 1_000,
+    absoluteTimeoutMs: 2_000,
+    progressReportIntervalMs: 250,
+    onProgress: (value) => observed.push(value),
+  });
+
+  listener?.(progress(1n, 5n));
+  t.mock.timers.tick(249);
+  listener?.(progress(2n, 5n));
+  t.mock.timers.tick(1);
+  listener?.(progress(3n, 5n));
+  resolveSynced?.('ready');
+
+  assert.equal(await operation, 'ready');
+  assert.deepEqual(observed.map((value) => value.shielded.current), [0n, 3n]);
 });
 
 test('wallet lifecycle treats total-only movement as stalled applied progress', async (t) => {
