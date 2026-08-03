@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { WalletSyncTimeoutError, withWalletSyncTimeout } from './sync-timeout.ts';
+import {
+  isIdleWalletSyncTimeout,
+  runWalletSyncLifecycle,
+  WalletSyncTimeoutError,
+  withWalletSyncTimeout,
+} from './sync-timeout.ts';
 
 function progress(current: bigint, total: bigint) {
   return {
@@ -10,11 +15,14 @@ function progress(current: bigint, total: bigint) {
   };
 }
 
-test('wallet sync operations fail with a stage-specific timeout instead of waiting forever', async () => {
+test('wallet sync operations fail with a stage-specific timeout instead of waiting forever', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const neverCompletes = new Promise<never>(() => {});
+  const operation = withWalletSyncTimeout(neverCompletes, 20, 'startup');
+  t.mock.timers.tick(20);
 
   await assert.rejects(
-    withWalletSyncTimeout(neverCompletes, 20, 'startup'),
+    operation,
     (error: unknown) => {
       assert.ok(error instanceof WalletSyncTimeoutError);
       assert.equal(error.stage, 'startup');
@@ -36,15 +44,20 @@ test('wallet sync timeout messages present long deadlines in seconds', async () 
   assert.match(error.message, /90 seconds/);
 });
 
-test('a wallet that starts after timeout is stopped again without entering sync wait', async () => {
-  const module = await import('./sync-timeout.ts');
-
+test('only an idle wallet sync timeout qualifies for a fresh-state retry', () => {
   assert.equal(
-    typeof module.runWalletSyncLifecycle,
-    'function',
-    'wallet sync lifecycle support should exist',
+    isIdleWalletSyncTimeout(new WalletSyncTimeoutError('sync', 60_000, 'idle')),
+    true,
   );
+  assert.equal(
+    isIdleWalletSyncTimeout(new WalletSyncTimeoutError('sync', 60_000, 'absolute')),
+    false,
+  );
+  assert.equal(isIdleWalletSyncTimeout(new Error('idle')), false);
+});
 
+test('a wallet that starts after timeout is stopped again without entering sync wait', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let resolveStart: (() => void) | undefined;
   let resolveLateStop: (() => void) | undefined;
   let waitCalls = 0;
@@ -56,7 +69,7 @@ test('a wallet that starts after timeout is stopped again without entering sync 
     resolveLateStop = resolve;
   });
 
-  const operation = module.runWalletSyncLifecycle({
+  const operation = runWalletSyncLifecycle({
     start: () => start,
     waitForSyncedState: async () => {
       waitCalls += 1;
@@ -68,24 +81,18 @@ test('a wallet that starts after timeout is stopped again without entering sync 
     },
   }, 20);
 
+  t.mock.timers.tick(20);
   await assert.rejects(operation, /20 ms/);
   assert.equal(stopCalls, 1);
 
   resolveStart?.();
-  await Promise.race([
-    lateStop,
-    new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error('late wallet cleanup was not called')), 500);
-    }),
-  ]);
+  await lateStop;
 
   assert.equal(waitCalls, 0);
   assert.equal(stopCalls, 2);
 });
 
 test('wallet lifecycle reports cleanup failure without hiding the original failure', async () => {
-  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
-
   await assert.rejects(
     runWalletSyncLifecycle({
       start: async () => {
@@ -105,8 +112,8 @@ test('wallet lifecycle reports cleanup failure without hiding the original failu
   );
 });
 
-test('wallet lifecycle keeps waiting while applied positions continue to advance', async () => {
-  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+test('wallet lifecycle keeps waiting while applied positions continue to advance', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
   let resolveSynced: ((value: string) => void) | undefined;
   const synced = new Promise<string>((resolve) => {
@@ -131,18 +138,21 @@ test('wallet lifecycle keeps waiting while applied positions continue to advance
     onProgress: (value) => observed.push(value),
   });
 
-  setTimeout(() => listener?.(progress(1n, 5n)), 15);
-  setTimeout(() => listener?.(progress(2n, 5n)), 45);
-  setTimeout(() => listener?.(progress(3n, 5n)), 75);
-  setTimeout(() => resolveSynced?.('ready'), 95);
+  t.mock.timers.tick(30);
+  listener?.(progress(1n, 5n));
+  t.mock.timers.tick(30);
+  listener?.(progress(2n, 5n));
+  t.mock.timers.tick(30);
+  listener?.(progress(3n, 5n));
+  resolveSynced?.('ready');
 
   assert.equal(await operation, 'ready');
   assert.equal(observed.at(-1)?.shielded.current, 3n);
   assert.equal(listener, undefined, 'progress subscription should be released');
 });
 
-test('wallet lifecycle treats total-only movement as stalled applied progress', async () => {
-  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+test('wallet lifecycle treats total-only movement as stalled applied progress', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
 
   const operation = runWalletSyncLifecycle({
@@ -161,8 +171,11 @@ test('wallet lifecycle treats total-only movement as stalled applied progress', 
     absoluteTimeoutMs: 250,
   });
 
-  setTimeout(() => listener?.(progress(7n, 11n)), 15);
-  setTimeout(() => listener?.(progress(7n, 12n)), 30);
+  t.mock.timers.tick(15);
+  listener?.(progress(7n, 11n));
+  t.mock.timers.tick(15);
+  listener?.(progress(7n, 12n));
+  t.mock.timers.tick(10);
 
   await assert.rejects(operation, (error: unknown) => {
     assert.ok(error instanceof WalletSyncTimeoutError);
@@ -172,10 +185,9 @@ test('wallet lifecycle treats total-only movement as stalled applied progress', 
   });
 });
 
-test('wallet lifecycle does not treat an applied-position rollback as progress', async () => {
-  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
+test('wallet lifecycle does not treat an applied-position rollback as progress', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
-  const startedAt = Date.now();
 
   const operation = runWalletSyncLifecycle({
     start: async () => undefined,
@@ -193,38 +205,44 @@ test('wallet lifecycle does not treat an applied-position rollback as progress',
     absoluteTimeoutMs: 250,
   });
 
-  setTimeout(() => listener?.(progress(6n, 10n)), 45);
+  t.mock.timers.tick(45);
+  listener?.(progress(6n, 10n));
+  t.mock.timers.tick(15);
 
   await assert.rejects(operation, (error: unknown) => {
     assert.ok(error instanceof WalletSyncTimeoutError);
     assert.equal(error.reason, 'idle');
-    assert.ok(Date.now() - startedAt < 85, 'rollback must not extend the idle deadline');
     return true;
   });
 });
 
-test('wallet lifecycle enforces an absolute limit even while progress advances', async () => {
-  const { runWalletSyncLifecycle } = await import('./sync-timeout.ts');
-  let current = 0n;
-  let timer: ReturnType<typeof setInterval> | undefined;
+test('wallet lifecycle enforces an absolute limit even while progress advances', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let listener: ((value: ReturnType<typeof progress>) => void) | undefined;
 
   const operation = runWalletSyncLifecycle({
     start: async () => undefined,
     waitForSyncedState: () => new Promise<never>(() => {}),
     stop: async () => undefined,
     subscribeProgress: (next) => {
-      timer = setInterval(() => {
-        current += 1n;
-        next(progress(current, 100n));
-      }, 10);
+      listener = next;
+      next(progress(0n, 100n));
       return () => {
-        if (timer !== undefined) clearInterval(timer);
+        listener = undefined;
       };
     },
   }, {
     idleTimeoutMs: 30,
     absoluteTimeoutMs: 75,
   });
+
+  t.mock.timers.tick(20);
+  listener?.(progress(1n, 100n));
+  t.mock.timers.tick(20);
+  listener?.(progress(2n, 100n));
+  t.mock.timers.tick(20);
+  listener?.(progress(3n, 100n));
+  t.mock.timers.tick(15);
 
   await assert.rejects(operation, (error: unknown) => {
     assert.ok(error instanceof WalletSyncTimeoutError);

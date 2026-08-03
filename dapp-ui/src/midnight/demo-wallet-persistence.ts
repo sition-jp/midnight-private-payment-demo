@@ -113,6 +113,7 @@ export interface DemoWalletStateFallbackOptions<T> {
   readonly cachedState: PersistedDemoWalletState | null;
   readonly clearCachedState: () => Promise<void>;
   readonly run: (state: PersistedDemoWalletState | null) => Promise<T>;
+  readonly shouldRetryFreshState: (error: unknown) => boolean;
   readonly shouldDiscardCachedState: (error: unknown) => boolean;
 }
 
@@ -123,6 +124,7 @@ export async function runWithDemoWalletStateFallback<T>(
   try {
     return await options.run(options.cachedState);
   } catch (error) {
+    if (options.shouldRetryFreshState(error)) return options.run(null);
     if (!options.shouldDiscardCachedState(error)) throw error;
     await options.clearCachedState();
     return options.run(null);

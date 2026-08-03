@@ -22,6 +22,7 @@ import { toHex } from '@midnight-ntwrk/midnight-js-utils';
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { MIDNIGHT_CONFIG } from './config.js';
 import {
+  isIdleWalletSyncTimeout,
   runWalletSyncLifecycle,
   WalletSyncTimeoutError,
   type WalletSyncProgressSnapshot,
@@ -293,6 +294,7 @@ export async function createWalletFromSeed(
       if (cache.storage && cache.cacheKey) await cache.storage.delete(cache.cacheKey);
     },
     run: (restoredState) => synchronizeDemoWallet(normalizedSeed, restoredState, options),
+    shouldRetryFreshState: isIdleWalletSyncTimeout,
     shouldDiscardCachedState: shouldDiscardRestoredWalletState,
   });
   const { internal, state } = synchronized;

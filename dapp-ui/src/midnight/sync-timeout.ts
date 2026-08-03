@@ -44,6 +44,10 @@ export class WalletSyncTimeoutError extends Error {
   }
 }
 
+export function isIdleWalletSyncTimeout(error: unknown): boolean {
+  return error instanceof WalletSyncTimeoutError && error.reason === 'idle';
+}
+
 export function withWalletSyncTimeout<T>(
   operation: Promise<T>,
   timeoutMs: number,
