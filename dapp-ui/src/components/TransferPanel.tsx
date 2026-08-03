@@ -56,6 +56,10 @@ export function TransferPanel({
           Update committed balances with a Zero-Knowledge Proof. The amount is hidden; sender and
           recipient public keys remain visible on-chain.
         </p>
+        <p className="text-xs text-yellow-400 mb-4">
+          Proof of concept: recipient private state is not delivered, so this is not a complete
+          two-party payment.
+        </p>
 
         {/* ZKP Badge */}
         <div className="bg-[#0066ff]/20 text-[#0066ff] px-3 py-1.5 rounded-full text-sm inline-block mb-4">
@@ -107,7 +111,7 @@ export function TransferPanel({
               ? 'Connect wallet & contract first'
               : !hasDeposited
                 ? 'Make a deposit first'
-                : 'Send Private'}
+                : 'Submit Hidden-Amount Transfer'}
           </button>
 
           {transferTx?.status === 'pending' && (

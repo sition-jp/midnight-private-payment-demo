@@ -33,7 +33,8 @@ export function BalancePanel({
       <div className="bg-[#16213e] rounded-lg p-6">
         <h2 className="text-xl font-bold text-white mb-2">Contract Balance</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          Query your private balance from the contract using a ZKP circuit.
+          The circuit verifies the committed value, but check_balance publicly discloses the
+          returned balance.
         </p>
 
         <div className="bg-[#1a1a2e] rounded-lg p-4 mb-4">

@@ -33,8 +33,8 @@ export function DepositPanel({ contract, onDeposit, currentTx, lastResult }: Dep
       <div className="bg-[#16213e] rounded-lg p-6">
         <h2 className="text-xl font-bold text-white mb-2">Deposit tNight</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          Deposit tNight tokens into the private-payment contract. This creates a shielded balance
-          that can be used for private transfers.
+          The deposit amount is public. The contract stores a commitment keyed by your public key;
+          the balance value remains hidden.
         </p>
 
         <div className="space-y-4">
