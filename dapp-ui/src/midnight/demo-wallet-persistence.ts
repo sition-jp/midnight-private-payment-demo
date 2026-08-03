@@ -30,6 +30,10 @@ const CACHE_KEY_DOMAIN = 'midnight-demo-v2:demo-wallet-cache-key:v1';
 const DATABASE_NAME = 'midnight-private-payment-demo';
 const OBJECT_STORE_NAME = 'wallet-states';
 
+export function buildDemoWalletCheckpointKey(cacheKey: string): string {
+  return `${cacheKey}:checkpoint`;
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -110,6 +114,68 @@ export async function loadDemoWalletState(
   return null;
 }
 
+export interface LoadedDemoWalletState {
+  readonly key: string;
+  readonly state: PersistedDemoWalletState;
+}
+
+export async function loadPreferredDemoWalletState(
+  storage: DemoWalletStateStorage,
+  canonicalKey: string,
+  networkId: string,
+  sdkVersion: string,
+): Promise<LoadedDemoWalletState | null> {
+  const checkpointKey = buildDemoWalletCheckpointKey(canonicalKey);
+  const checkpoint = await loadDemoWalletState(
+    storage,
+    checkpointKey,
+    networkId,
+    sdkVersion,
+  );
+  if (checkpoint) return { key: checkpointKey, state: checkpoint };
+
+  const canonical = await loadDemoWalletState(
+    storage,
+    canonicalKey,
+    networkId,
+    sdkVersion,
+  );
+  return canonical ? { key: canonicalKey, state: canonical } : null;
+}
+
+export interface PeriodicDemoWalletCheckpointOptions {
+  readonly intervalMs: number;
+  readonly save: () => Promise<void>;
+  readonly onError: (error: unknown) => void;
+}
+
+export interface PeriodicDemoWalletCheckpoints {
+  stop(): Promise<void>;
+}
+
+export function startPeriodicDemoWalletCheckpoints(
+  options: PeriodicDemoWalletCheckpointOptions,
+): PeriodicDemoWalletCheckpoints {
+  let active = true;
+  let inFlight: Promise<void> | null = null;
+  const timer = setInterval(() => {
+    if (!active || inFlight) return;
+    inFlight = options.save()
+      .catch(options.onError)
+      .finally(() => {
+        inFlight = null;
+      });
+  }, options.intervalMs);
+
+  return {
+    stop: async () => {
+      active = false;
+      clearInterval(timer);
+      await inFlight;
+    },
+  };
+}
+
 export async function saveDemoWalletState(
   storage: DemoWalletStateStorage,
   key: string,
@@ -118,6 +184,15 @@ export async function saveDemoWalletState(
   const parsed = parseDemoWalletState(state, state.networkId, state.sdkVersion);
   if (!parsed) throw new Error('Refusing to persist invalid demo wallet state');
   await storage.set(key, parsed);
+}
+
+export async function promoteDemoWalletCheckpoint(
+  storage: DemoWalletStateStorage,
+  canonicalKey: string,
+  synchronizedState: PersistedDemoWalletState,
+): Promise<void> {
+  await saveDemoWalletState(storage, canonicalKey, synchronizedState);
+  await storage.delete(buildDemoWalletCheckpointKey(canonicalKey));
 }
 
 export interface DemoWalletStateFallbackOptions<T> {

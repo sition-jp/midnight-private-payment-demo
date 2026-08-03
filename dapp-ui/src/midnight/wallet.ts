@@ -33,19 +33,23 @@ import {
 } from './wallet-readiness.js';
 import {
   buildDemoWalletStateKey,
+  buildDemoWalletCheckpointKey,
   createIndexedDbDemoWalletStateStorage,
   DEMO_WALLET_SDK_VERSION,
-  loadDemoWalletState,
+  loadPreferredDemoWalletState,
+  promoteDemoWalletCheckpoint,
   runWithDemoWalletStateFallback,
   saveDemoWalletState,
+  startPeriodicDemoWalletCheckpoints,
   type DemoWalletStateStorage,
   type PersistedDemoWalletState,
 } from './demo-wallet-persistence.js';
 import type { WalletContext } from '../types/index.js';
 
 const DEMO_WALLET_IDLE_TIMEOUT_MS = 60_000;
-const DEMO_WALLET_ABSOLUTE_TIMEOUT_MS = 45 * 60_000;
+const DEMO_WALLET_ABSOLUTE_TIMEOUT_MS = 3 * 60 * 60_000;
 const DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS = 250;
+const DEMO_WALLET_CHECKPOINT_INTERVAL_MS = 60_000;
 
 // ─── Network Setup ───────────────────────────────────────────────────────────
 
@@ -179,6 +183,7 @@ async function synchronizeDemoWallet(
   seed: string,
   restoredState: PersistedDemoWalletState | null,
   options: DemoWalletSyncOptions,
+  saveCheckpoint?: (internal: InternalDemoWallet) => Promise<void>,
 ): Promise<SynchronizedDemoWallet> {
   let internal: InternalDemoWallet;
   try {
@@ -190,32 +195,47 @@ async function synchronizeDemoWallet(
     throw error;
   }
 
-  const state = await runWalletSyncLifecycle({
-    start: () => internal.wallet.start(
-      internal.shieldedSecretKeys,
-      internal.dustSecretKey,
-    ),
-    waitForSyncedState: async () => {
-      const syncedState = await internal.wallet.waitForSyncedState();
-      if (!isWalletSyncProgressStrictlyReady(readWalletSyncProgress(syncedState))) {
-        throw new Error('Wallet SDK returned before strict synchronization completed');
-      }
-      return syncedState;
-    },
-    stop: () => internal.wallet.stop(),
-    subscribeProgress: (listener, onError) => {
-      const subscription = internal.wallet.state().subscribe({
-        next: (walletState) => listener(readWalletSyncProgress(walletState)),
-        error: onError,
-      });
-      return () => subscription.unsubscribe();
-    },
-  }, {
-    idleTimeoutMs: options.idleTimeoutMs ?? DEMO_WALLET_IDLE_TIMEOUT_MS,
-    absoluteTimeoutMs: options.absoluteTimeoutMs ?? DEMO_WALLET_ABSOLUTE_TIMEOUT_MS,
-    progressReportIntervalMs: DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS,
-    onProgress: options.onProgress,
-  });
+  const checkpoints = saveCheckpoint
+    ? startPeriodicDemoWalletCheckpoints({
+      intervalMs: DEMO_WALLET_CHECKPOINT_INTERVAL_MS,
+      save: () => saveCheckpoint(internal),
+      onError: () => {
+        console.warn('[Wallet] Demo wallet checkpoint could not be saved');
+      },
+    })
+    : null;
+
+  let state: Awaited<ReturnType<WalletFacade['waitForSyncedState']>>;
+  try {
+    state = await runWalletSyncLifecycle({
+      start: () => internal.wallet.start(
+        internal.shieldedSecretKeys,
+        internal.dustSecretKey,
+      ),
+      waitForSyncedState: async () => {
+        const syncedState = await internal.wallet.waitForSyncedState();
+        if (!isWalletSyncProgressStrictlyReady(readWalletSyncProgress(syncedState))) {
+          throw new Error('Wallet SDK returned before strict synchronization completed');
+        }
+        return syncedState;
+      },
+      stop: () => internal.wallet.stop(),
+      subscribeProgress: (listener, onError) => {
+        const subscription = internal.wallet.state().subscribe({
+          next: (walletState) => listener(readWalletSyncProgress(walletState)),
+          error: onError,
+        });
+        return () => subscription.unsubscribe();
+      },
+    }, {
+      idleTimeoutMs: options.idleTimeoutMs ?? DEMO_WALLET_IDLE_TIMEOUT_MS,
+      absoluteTimeoutMs: options.absoluteTimeoutMs ?? DEMO_WALLET_ABSOLUTE_TIMEOUT_MS,
+      progressReportIntervalMs: DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS,
+      onProgress: options.onProgress,
+    });
+  } finally {
+    await checkpoints?.stop();
+  }
 
   return { internal, state, restored: restoredState !== null };
 }
@@ -249,26 +269,71 @@ async function persistDemoWalletState(
   });
 }
 
+async function promoteSynchronizedDemoWalletState(
+  storage: DemoWalletStateStorage | null,
+  canonicalKey: string | null,
+  internal: InternalDemoWallet,
+): Promise<void> {
+  if (!storage || !canonicalKey) return;
+  const [shielded, unshielded, dust] = await Promise.all([
+    internal.wallet.shielded.serializeState(),
+    internal.wallet.unshielded.serializeState(),
+    internal.wallet.dust.serializeState(),
+  ]);
+  await promoteDemoWalletCheckpoint(storage, canonicalKey, {
+    schemaVersion: 1,
+    networkId: getNetworkId(),
+    sdkVersion: DEMO_WALLET_SDK_VERSION,
+    savedAt: Date.now(),
+    shielded,
+    unshielded,
+    dust,
+  });
+}
+
 async function loadDemoWalletCache(seed: string): Promise<{
   readonly storage: DemoWalletStateStorage | null;
   readonly cacheKey: string | null;
+  readonly checkpointKey: string | null;
+  readonly loadedKey: string | null;
   readonly state: PersistedDemoWalletState | null;
 }> {
   const storage = createIndexedDbDemoWalletStateStorage();
-  if (!storage) return { storage: null, cacheKey: null, state: null };
+  if (!storage) {
+    return {
+      storage: null,
+      cacheKey: null,
+      checkpointKey: null,
+      loadedKey: null,
+      state: null,
+    };
+  }
   try {
     const networkId = getNetworkId();
     const cacheKey = await buildDemoWalletStateKey(seed, networkId, DEMO_WALLET_SDK_VERSION);
-    const state = await loadDemoWalletState(
+    const checkpointKey = buildDemoWalletCheckpointKey(cacheKey);
+    const loaded = await loadPreferredDemoWalletState(
       storage,
       cacheKey,
       networkId,
       DEMO_WALLET_SDK_VERSION,
     );
-    return { storage, cacheKey, state };
+    return {
+      storage,
+      cacheKey,
+      checkpointKey,
+      loadedKey: loaded?.key ?? null,
+      state: loaded?.state ?? null,
+    };
   } catch {
     console.warn('[Wallet] Demo wallet cache is unavailable; continuing with chain sync');
-    return { storage: null, cacheKey: null, state: null };
+    return {
+      storage: null,
+      cacheKey: null,
+      checkpointKey: null,
+      loadedKey: null,
+      state: null,
+    };
   }
 }
 
@@ -287,16 +352,23 @@ export async function createWalletFromSeed(
   const synchronized = await runWithDemoWalletStateFallback({
     cachedState: cache.state,
     clearCachedState: async () => {
-      if (cache.storage && cache.cacheKey) await cache.storage.delete(cache.cacheKey);
+      if (cache.storage && cache.loadedKey) await cache.storage.delete(cache.loadedKey);
     },
-    run: (restoredState) => synchronizeDemoWallet(normalizedSeed, restoredState, options),
+    run: (restoredState) => synchronizeDemoWallet(
+      normalizedSeed,
+      restoredState,
+      options,
+      cache.storage && cache.checkpointKey
+        ? (internal) => persistDemoWalletState(cache.storage, cache.checkpointKey, internal)
+        : undefined,
+    ),
     shouldRetryFreshState: isIdleWalletSyncTimeout,
     shouldDiscardCachedState: shouldDiscardRestoredWalletState,
   });
   const { internal, state } = synchronized;
 
   try {
-    await persistDemoWalletState(cache.storage, cache.cacheKey, internal);
+    await promoteSynchronizedDemoWalletState(cache.storage, cache.cacheKey, internal);
   } catch {
     console.warn('[Wallet] Demo wallet state could not be cached; synchronization remains valid');
   }
@@ -342,7 +414,7 @@ export async function createWalletFromSeed(
     submitTx: walletProvider.submitTx,
     stop: async () => {
       try {
-        await persistDemoWalletState(cache.storage, cache.cacheKey, internal);
+        await promoteSynchronizedDemoWalletState(cache.storage, cache.cacheKey, internal);
       } catch {
         console.warn('[Wallet] Demo wallet state could not be cached during disconnect');
       } finally {

@@ -3,10 +3,14 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   buildDemoWalletStateKey,
+  buildDemoWalletCheckpointKey,
   DEMO_WALLET_SDK_VERSION,
+  loadPreferredDemoWalletState,
   loadDemoWalletState,
+  promoteDemoWalletCheckpoint,
   runWithDemoWalletStateFallback,
   saveDemoWalletState,
+  startPeriodicDemoWalletCheckpoints,
   type DemoWalletStateStorage,
   type PersistedDemoWalletState,
 } from './demo-wallet-persistence.ts';
@@ -70,6 +74,20 @@ function memoryStorage(initial?: unknown) {
   };
 }
 
+function keyedMemoryStorage(initial: Record<string, unknown> = {}) {
+  const values = new Map(Object.entries(initial));
+  const storage: DemoWalletStateStorage = {
+    get: async (key) => values.get(key),
+    set: async (key, value) => {
+      values.set(key, value);
+    },
+    delete: async (key) => {
+      values.delete(key);
+    },
+  };
+  return { storage, read: (key: string) => values.get(key) };
+}
+
 test('demo wallet cache keys partition state without exposing the raw seed', async () => {
   const key = await buildDemoWalletStateKey(SEED, NETWORK_ID, SDK_VERSION);
   const otherNetworkKey = await buildDemoWalletStateKey(SEED, 'preview', SDK_VERSION);
@@ -107,6 +125,64 @@ test('invalid cached wallet state is discarded before a restore is attempted', a
 
   assert.equal(loaded, null);
   assert.equal(cache.deleteCalls(), 1);
+});
+
+test('an interrupted-sync checkpoint is preferred over the canonical cache', async () => {
+  const canonicalKey = 'cache-key';
+  const checkpointKey = buildDemoWalletCheckpointKey(canonicalKey);
+  const canonical = validState();
+  const checkpoint = { ...validState(), savedAt: canonical.savedAt + 1 };
+  const cache = keyedMemoryStorage({
+    [canonicalKey]: canonical,
+    [checkpointKey]: checkpoint,
+  });
+
+  const loaded = await loadPreferredDemoWalletState(
+    cache.storage,
+    canonicalKey,
+    NETWORK_ID,
+    SDK_VERSION,
+  );
+
+  assert.equal(loaded?.key, checkpointKey);
+  assert.deepEqual(loaded?.state, checkpoint);
+});
+
+test('periodic checkpoints stop cleanly and do not continue writing', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let saves = 0;
+  const checkpoints = startPeriodicDemoWalletCheckpoints({
+    intervalMs: 60_000,
+    save: async () => {
+      saves += 1;
+    },
+    onError: () => assert.fail('checkpoint save should not fail'),
+  });
+
+  t.mock.timers.tick(59_999);
+  assert.equal(saves, 0);
+  t.mock.timers.tick(1);
+  await Promise.resolve();
+  assert.equal(saves, 1);
+
+  await checkpoints.stop();
+  t.mock.timers.tick(60_000);
+  assert.equal(saves, 1);
+});
+
+test('strictly synced state replaces canonical cache and removes its checkpoint', async () => {
+  const canonicalKey = 'cache-key';
+  const checkpointKey = buildDemoWalletCheckpointKey(canonicalKey);
+  const synchronized = { ...validState(), savedAt: validState().savedAt + 2 };
+  const cache = keyedMemoryStorage({
+    [canonicalKey]: validState(),
+    [checkpointKey]: { ...validState(), savedAt: validState().savedAt + 1 },
+  });
+
+  await promoteDemoWalletCheckpoint(cache.storage, canonicalKey, synchronized);
+
+  assert.deepEqual(cache.read(canonicalKey), synchronized);
+  assert.equal(cache.read(checkpointKey), undefined);
 });
 
 test('wallet state persistence stores all three serialized modules', async () => {
