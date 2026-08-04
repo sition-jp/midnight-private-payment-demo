@@ -25,6 +25,19 @@ test('workshop UI states the exact disclosure boundary', () => {
   assert.doesNotMatch(txResult, /Tx Hash:/);
 });
 
+test('visibility panel binds the tested comparison caption and disclosure copy', () => {
+  const visibilityPanel = read('../components/VisibilityPanel.tsx');
+
+  assert.match(visibilityPanel, /Public chain comparison/);
+  assert.match(visibilityPanel, /Midnight put on-chain/);
+  assert.match(visibilityPanel, /Not put on-chain/);
+  assert.match(visibilityPanel, /Public keys remain visible/);
+  assert.match(visibilityPanel, /Amounts remain hidden/);
+  assert.match(visibilityPanel, /Illustration only/);
+  assert.match(visibilityPanel, /publicComparisonCaption/);
+  assert.doesNotMatch(visibilityPanel, /recipient.*hidden on-chain/i);
+});
+
 test('workshop script does not claim recipient anonymity or complete payment delivery', () => {
   const script = read('../../../demo/demo-script.md');
 

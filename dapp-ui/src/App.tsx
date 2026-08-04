@@ -6,10 +6,11 @@ import { Header } from './components/Header.js';
 import { WalletPanel } from './components/WalletPanel.js';
 import { DepositPanel } from './components/DepositPanel.js';
 import { TransferPanel } from './components/TransferPanel.js';
+import { VisibilityPanel } from './components/VisibilityPanel.js';
 import { BalancePanel } from './components/BalancePanel.js';
 import type { TransactionResult } from './types/index.js';
 
-type Tab = 'wallet' | 'deposit' | 'transfer' | 'explorer';
+type Tab = 'wallet' | 'deposit' | 'transfer' | 'visibility' | 'explorer';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('wallet');
@@ -46,6 +47,9 @@ function App() {
       const result = await txHook.transfer(contractHook.contract, amount, recipientHex);
       if (result) {
         setLastTransferResult(result);
+        if (result.disclosure) {
+          setActiveTab('visibility');
+        }
       }
       return result;
     },
@@ -61,6 +65,7 @@ function App() {
     { key: 'wallet', label: 'Wallet', icon: '\uD83D\uDC5B' },
     { key: 'deposit', label: 'Deposit', icon: '\uD83D\uDCB0' },
     { key: 'transfer', label: 'Private Transfer', icon: '\uD83D\uDD12' },
+    { key: 'visibility', label: 'Visibility', icon: '\uD83D\uDC41' },
     { key: 'explorer', label: 'Balance', icon: '\uD83D\uDD0D' },
   ];
 
@@ -73,6 +78,10 @@ function App() {
           if (wallet.walletContext) {
             wallet.disconnect();
             contractHook.disconnect();
+            setHasDeposited(false);
+            setLastDepositResult(null);
+            setLastTransferResult(null);
+            setActiveTab('wallet');
           }
         }}
         walletContext={wallet.walletContext}
@@ -110,6 +119,9 @@ function App() {
               wallet.disconnect();
               contractHook.disconnect();
               setHasDeposited(false);
+              setLastDepositResult(null);
+              setLastTransferResult(null);
+              setActiveTab('wallet');
             }}
             onConnectContract={handleConnectContract}
             walletContext={wallet.walletContext}
@@ -140,6 +152,9 @@ function App() {
             lastResult={lastTransferResult}
             hasDeposited={hasDeposited}
           />
+        )}
+        {activeTab === 'visibility' && (
+          <VisibilityPanel disclosure={lastTransferResult?.disclosure ?? null} />
         )}
         {activeTab === 'explorer' && (
           <BalancePanel
