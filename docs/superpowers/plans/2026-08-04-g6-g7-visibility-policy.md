@@ -303,7 +303,7 @@ With the existing private runtime configuration and disposable Demo wallet, conn
 await __demoBalancePositive()
 ```
 
-Expected: `true` only. Do not print, inspect, or retain the balance value. If the result is `false` or throws, stop before Task 2 and investigate the retained-provider wiring.
+Expected: `true` only. Do not print, inspect, or retain the balance value. If the result is `false` or throws, stop before Task 3 and investigate the retained-provider wiring. Task 2 may proceed while this runtime check is pending, but Task 3/4 must not begin until it passes.
 
 Remove the temporary hook immediately and verify:
 
