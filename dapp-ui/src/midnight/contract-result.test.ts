@@ -1,7 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { extractCircuitResult } from './contract-result.ts';
+import {
+  extractCircuitResult,
+  extractFinalizedTransactionMetadata,
+} from './contract-result.ts';
+
+test('extracts only public finalized transaction metadata', () => {
+  const source = {
+    public: { txHash: 'synthetic-hash', blockHeight: 42 },
+    private: { result: 7n, nextPrivateState: { secretKey: 'must-not-escape' } },
+  };
+
+  assert.deepEqual(extractFinalizedTransactionMetadata(source), {
+    txHash: 'synthetic-hash',
+    blockHeight: 42,
+  });
+  assert.doesNotMatch(
+    JSON.stringify(extractFinalizedTransactionMetadata(source)),
+    /secretKey/,
+  );
+});
 
 test('extracts the JS circuit return value from the SDK private envelope', () => {
   const finalizedCall = {

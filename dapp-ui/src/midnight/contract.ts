@@ -14,6 +14,7 @@ import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import {
   createProofProvider,
   type MidnightProviders,
+  type PrivateStateProvider,
   type UnboundTransaction,
 } from '@midnight-ntwrk/midnight-js-types';
 import {
@@ -23,12 +24,18 @@ import {
 import { fromHex, toHex } from '@midnight-ntwrk/midnight-js-utils';
 
 import { MIDNIGHT_CONFIG } from './config.js';
-import { extractCircuitResult } from './contract-result.js';
+import {
+  extractCircuitResult,
+  extractFinalizedTransactionMetadata,
+} from './contract-result.js';
+import { buildTransferDisclosure } from './transfer-disclosure.js';
 import { inMemoryPrivateStateProvider } from '../providers/InMemoryPrivateStateProvider.js';
 import {
   createWitnesses,
   createInitialPrivateState,
+  deriveContractPublicKey,
   setTransferContext,
+  transferContext,
   type PrivatePaymentState,
 } from './witness.js';
 import { getDemoWalletProvider } from './wallet.js';
@@ -64,7 +71,7 @@ async function buildCompiledContract() {
     CompiledContract.withCompiledFileAssets(window.location.origin),
   );
 
-  return { compiledContract };
+  return { compiledContract, contractModule };
 }
 
 // ─── Provider Assembly ───────────────────────────────────────────────────────
@@ -74,7 +81,12 @@ async function buildCompiledContract() {
  * - FetchZkConfigProvider with fetch.bind(window) for browser compatibility
  * - httpClientProofProvider with direct proof server URL
  */
-function createBrowserProviders(walletCtx: WalletContext): MidnightProviders {
+type BrowserPrivateStateProvider = PrivateStateProvider<string, PrivatePaymentState>;
+
+function createBrowserProviders(
+  walletCtx: WalletContext,
+  privateStateProvider: BrowserPrivateStateProvider,
+): MidnightProviders {
   const walletProvider = getDemoWalletProvider(walletCtx);
 
   // Use FetchZkConfigProvider (official browser-compatible provider)
@@ -88,7 +100,7 @@ function createBrowserProviders(walletCtx: WalletContext): MidnightProviders {
   const proofServerUrl = MIDNIGHT_CONFIG.proofServer;
 
   return {
-    privateStateProvider: inMemoryPrivateStateProvider(),
+    privateStateProvider,
     publicDataProvider: indexerPublicDataProvider(
       MIDNIGHT_CONFIG.indexer,
       MIDNIGHT_CONFIG.indexerWS,
@@ -107,7 +119,10 @@ function createBrowserProviders(walletCtx: WalletContext): MidnightProviders {
  * Delegates proving to 1AM instead of using the localhost proof server.
  * Uses 1AM's balanceUnsealedTransaction for tx balancing.
  */
-async function create1AMProviders(walletCtx: WalletContext): Promise<MidnightProviders> {
+async function create1AMProviders(
+  walletCtx: WalletContext,
+  privateStateProvider: BrowserPrivateStateProvider,
+): Promise<MidnightProviders> {
   const api = walletCtx.rawWalletApi;
   if (!api) {
     throw new Error('1AM wallet API not available. rawWalletApi is undefined.');
@@ -150,7 +165,7 @@ async function create1AMProviders(walletCtx: WalletContext): Promise<MidnightPro
   };
 
   return {
-    privateStateProvider: inMemoryPrivateStateProvider(),
+    privateStateProvider,
     publicDataProvider: indexerPublicDataProvider(indexerUrl, indexerWsUrl),
     zkConfigProvider,
     proofProvider,
@@ -167,20 +182,43 @@ async function create1AMProviders(walletCtx: WalletContext): Promise<MidnightPro
 
 // ─── Transaction Helpers ─────────────────────────────────────────────────────
 
-function extractTxHash(result: unknown): string {
-  const r = result as Record<string, unknown> | undefined;
-  const pub = r?.public as Record<string, unknown> | undefined;
-  return (pub?.txHash as string) ?? (r?.txHash as string) ?? 'unknown';
+function makeTransactionResult(result: unknown): TransactionResult {
+  const metadata = extractFinalizedTransactionMetadata(result);
+  return {
+    txHash: metadata.txHash,
+    status: 'confirmed',
+    blockHeight: metadata.blockHeight,
+    explorerUrl: `${MIDNIGHT_CONFIG.explorerUrl}/tx/0x${metadata.txHash}`,
+  };
 }
 
-function makeTransactionResult(result: unknown): TransactionResult {
-  const txHash = extractTxHash(result);
-  return {
-    txHash,
-    status: 'confirmed',
-    explorerUrl: `${MIDNIGHT_CONFIG.explorerUrl}/tx/0x${txHash}`,
-    result,
-  };
+function requireRecord(value: unknown, message: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(message);
+  }
+  return value as Record<string, unknown>;
+}
+
+function getPublicNextContractState(result: unknown): unknown {
+  const root = requireRecord(result, 'Finalized transfer result is unavailable');
+  const publicData = requireRecord(root.public, 'Finalized public transfer data is unavailable');
+  if (publicData.nextContractState == null) {
+    throw new Error('Finalized public contract state is unavailable');
+  }
+  return publicData.nextContractState;
+}
+
+function getPrivateNextState(result: unknown): PrivatePaymentState {
+  const root = requireRecord(result, 'Finalized transfer result is unavailable');
+  const privateData = requireRecord(root.private, 'Finalized private transfer data is unavailable');
+  return privateData.nextPrivateState as PrivatePaymentState;
+}
+
+function requireBlockHeight(value: number | undefined): number {
+  if (value == null) {
+    throw new Error('Transfer finalized, but its block height is unavailable');
+  }
+  return value;
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -193,10 +231,12 @@ export async function connectToContract(
   contractAddress: string,
   secretKey: Uint8Array,
 ): Promise<ContractContext> {
-  const { compiledContract } = await buildCompiledContract();
+  const privateStateProvider = inMemoryPrivateStateProvider<string, PrivatePaymentState>();
+  const senderPublicKey = deriveContractPublicKey(secretKey);
+  const { compiledContract, contractModule } = await buildCompiledContract();
   const providers = walletCtx.mode === 'lace' && walletCtx.rawWalletApi
-    ? await create1AMProviders(walletCtx)
-    : createBrowserProviders(walletCtx);
+    ? await create1AMProviders(walletCtx, privateStateProvider)
+    : createBrowserProviders(walletCtx, privateStateProvider);
 
   const contract = await (findDeployedContract as unknown as (
     providers: MidnightProviders,
@@ -228,8 +268,28 @@ export async function connectToContract(
     },
 
     async privateTransfer(): Promise<TransactionResult> {
+      const submitted = {
+        amount: transferContext.amount,
+        recipient: new Uint8Array(transferContext.recipient),
+      };
       const result = await contract.callTx.private_transfer();
-      return makeTransactionResult(result);
+      const metadata = extractFinalizedTransactionMetadata(result);
+      const publicState = getPublicNextContractState(result);
+      const privateState = getPrivateNextState(result);
+      const ledgerView = contractModule.ledger(
+        publicState as Parameters<typeof contractModule.ledger>[0],
+      );
+      const disclosure = buildTransferDisclosure({
+        senderPublicKey,
+        recipientPublicKey: submitted.recipient,
+        amount: submitted.amount,
+        txHash: metadata.txHash,
+        blockHeight: requireBlockHeight(metadata.blockHeight),
+        senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
+        recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
+        nextPrivateState: privateState,
+      });
+      return { ...makeTransactionResult(result), disclosure };
     },
 
     async checkBalance(): Promise<TransactionResult> {
@@ -238,8 +298,20 @@ export async function connectToContract(
       // return values in the generic privacy-sensitive `private.result` envelope.
       // Extract only the value; never log or persist the surrounding object.
       const balance = extractCircuitResult(result);
+      if (typeof balance !== 'bigint') {
+        throw new Error('Disclosed contract balance is unavailable');
+      }
       const txResult = makeTransactionResult(result);
       return { ...txResult, result: balance };
+    },
+
+    async readPrivateBalance(): Promise<bigint> {
+      const privateState = await privateStateProvider.get('privatePaymentBrowser');
+      const balance = privateState?.balances.get(toHex(senderPublicKey));
+      if (balance == null) {
+        throw new Error('Local contract balance is unavailable');
+      }
+      return balance;
     },
   };
 }

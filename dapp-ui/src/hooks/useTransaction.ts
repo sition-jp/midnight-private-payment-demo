@@ -103,7 +103,7 @@ export function useTransaction(): UseTransactionReturn {
         setCurrentTx((prev) => (prev ? { ...prev, status: 'confirmed' } : null));
         setTransactions((prev) => [result, ...prev]);
         if (result.result != null) {
-          setBalance(BigInt(result.result as string | number | bigint));
+          setBalance(result.result);
         }
         return result;
       } catch (err) {

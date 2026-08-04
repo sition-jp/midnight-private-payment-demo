@@ -51,6 +51,24 @@ export interface WalletContext {
 /** Status of a submitted transaction */
 export type TxStatus = 'pending' | 'confirmed' | 'failed';
 
+/** Explicitly selected values used by the workshop transfer-visibility panel. */
+export interface TransferDisclosureSnapshot {
+  readonly onChain: {
+    readonly senderPublicKey: string;
+    readonly recipientPublicKey: string;
+    readonly senderCommitment: string;
+    readonly recipientCommitment: string;
+    readonly txHash: string;
+    readonly blockHeight: number;
+  };
+  readonly localOnly: {
+    readonly amount: bigint;
+    readonly senderBalanceAfter: bigint;
+    readonly senderSalt: string;
+    readonly recipientSalt: string;
+  };
+}
+
 /** Result of a contract transaction */
 export interface TransactionResult {
   /** Transaction hash */
@@ -60,7 +78,9 @@ export interface TransactionResult {
   /** Block height if confirmed */
   readonly blockHeight?: number;
   /** Return value from circuit (e.g., balance from check_balance) */
-  readonly result?: unknown;
+  readonly result?: bigint;
+  /** Ephemeral values selected for the transfer-visibility lesson */
+  readonly disclosure?: TransferDisclosureSnapshot;
   /** Explorer URL for this transaction */
   readonly explorerUrl: string;
 }
@@ -77,6 +97,8 @@ export interface ContractContext {
   readonly privateTransfer: () => Promise<TransactionResult>;
   /** Execute check_balance() */
   readonly checkBalance: () => Promise<TransactionResult>;
+  /** Read the retained local private balance without disclosing it on-chain */
+  readonly readPrivateBalance: () => Promise<bigint>;
 }
 
 // ─── Transfer Context ────────────────────────────────────────────────────────
