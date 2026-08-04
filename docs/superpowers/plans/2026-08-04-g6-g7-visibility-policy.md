@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Revision:** v1.1 — 2026-08-04 review P1×2 incorporated before implementation
+
 **Goal:** Add an accurate three-column transfer visibility panel and a deterministic automatic payment policy that records its decision and fires one approved Preprod transfer.
 
 **Architecture:** The contract adapter sanitizes Midnight finalized-call data into a narrow `TransactionResult` and an ephemeral `TransferDisclosureSnapshot`. A pure visibility model maps that snapshot into the three workshop columns. A pure policy evaluator and injected runner decide whether to call the existing transfer path; React panels only collect inputs and render these tested models.
@@ -286,7 +288,32 @@ npx tsc --noEmit
 
 Expected: all PASS and no type errors.
 
-- [ ] **Step 9: Commit Task 1**
+- [ ] **Step 9: Verify the retained provider wiring in the real browser with a boolean-only probe**
+
+Temporarily add this hook immediately after `useContract` connects successfully. Never commit it:
+
+```ts
+(window as unknown as Record<string, unknown>).__demoBalancePositive =
+  async () => (await ctx.readPrivateBalance()) > 0n;
+```
+
+With the existing private runtime configuration and disposable Demo wallet, connect the wallet and contract, then perform one deposit. In DevTools evaluate:
+
+```js
+await __demoBalancePositive()
+```
+
+Expected: `true` only. Do not print, inspect, or retain the balance value. If the result is `false` or throws, stop before Task 2 and investigate the retained-provider wiring.
+
+Remove the temporary hook immediately and verify:
+
+```bash
+git diff -- dapp-ui/src/hooks/useContract.ts
+```
+
+Expected: empty output.
+
+- [ ] **Step 10: Commit Task 1**
 
 ```bash
 git add dapp-ui/src/types/index.ts dapp-ui/src/midnight/contract-result.ts dapp-ui/src/midnight/contract-result.test.ts dapp-ui/src/midnight/transfer-disclosure.ts dapp-ui/src/midnight/transfer-disclosure.test.ts dapp-ui/src/midnight/contract.ts dapp-ui/src/hooks/useTransaction.ts
@@ -310,9 +337,37 @@ git commit -m "fix(ui): sanitize transfer disclosure state"
 
 - [ ] **Step 1: Write failing column-placement tests**
 
-Create a synthetic disclosure and assert:
+Use these fixed fixtures so byte-derived hex values contain only `a`–`f` and cannot accidentally match the decimal amount or balance digit runs:
 
 ```ts
+const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
+const senderPublicKey = new Uint8Array(32).fill(0xaa);
+const recipientPublicKey = new Uint8Array(32).fill(0xbb);
+const senderCommitment = new Uint8Array(32).fill(0xcc);
+const recipientCommitment = new Uint8Array(32).fill(0xdd);
+const senderSalt = new Uint8Array(32).fill(0xee);
+const recipientSalt = new Uint8Array(32).fill(0xff);
+
+const disclosure: TransferDisclosureSnapshot = {
+  onChain: {
+    senderPublicKey: hex(senderPublicKey),
+    recipientPublicKey: hex(recipientPublicKey),
+    senderCommitment: hex(senderCommitment),
+    recipientCommitment: hex(recipientCommitment),
+    txHash: 'synthetic-transaction',
+    blockHeight: 42,
+  },
+  localOnly: {
+    amount: 1234567n,
+    senderBalanceAfter: 7654321n,
+    senderSalt: hex(senderSalt),
+    recipientSalt: hex(recipientSalt),
+  },
+};
+
+const row = (rows: readonly VisibilityRow[], label: string) =>
+  rows.find((candidate) => candidate.label === label)?.value;
+
 const one = buildVisibilityModel(disclosure, 1);
 assert.deepEqual(one.onChain.map((row) => row.label), [
   'Sender public key',
@@ -328,10 +383,36 @@ assert.deepEqual(one.localOnly.map((row) => row.label), [
   'Sender salt',
   'Recipient salt',
 ]);
-assert.doesNotMatch(JSON.stringify(one.localOnly), /public key/i);
-assert.match(buildVisibilityModel(disclosure, 100).lesson, /counterparty-key trail/i);
-assert.equal(buildVisibilityModel(disclosure, 100).isIllustration, true);
+
+assert.equal(row(one.onChain, 'Sender public key'), hex(senderPublicKey));
+assert.equal(row(one.onChain, 'Recipient public key'), hex(recipientPublicKey));
+assert.equal(row(one.localOnly, 'Transfer amount'), '1234567');
+assert.equal(row(one.localOnly, 'Sender balance after transfer'), '7654321');
+assert.equal(row(one.localOnly, 'Sender salt'), hex(senderSalt));
+assert.equal(row(one.localOnly, 'Recipient salt'), hex(recipientSalt));
+
+const localOnlyJson = JSON.stringify(one.localOnly);
+assert.doesNotMatch(localOnlyJson, new RegExp(hex(senderPublicKey), 'i'));
+assert.doesNotMatch(localOnlyJson, new RegExp(hex(recipientPublicKey), 'i'));
+
+const onChainJson = JSON.stringify(one.onChain);
+assert.doesNotMatch(onChainJson, new RegExp(hex(senderSalt), 'i'));
+assert.doesNotMatch(onChainJson, new RegExp(hex(recipientSalt), 'i'));
+assert.doesNotMatch(onChainJson, /1234567/);
+assert.doesNotMatch(onChainJson, /7654321/);
+
+for (const mode of [1, 100] as const) {
+  const model = buildVisibilityModel(disclosure, mode);
+  assert.ok(model.publicComparisonCaption.length > 0);
+  assert.match(model.publicComparisonCaption, /comparison/i);
+}
+
+const repeated = buildVisibilityModel(disclosure, 100);
+assert.match(repeated.lesson, /counterparty-key trail/i);
+assert.equal(repeated.isIllustration, true);
 ```
+
+`VisibilityRow.value` is always a string. Do not call `JSON.stringify` on `TransferDisclosureSnapshot`, because its local amount fields are `bigint`.
 
 - [ ] **Step 2: Run and verify RED**
 
@@ -350,6 +431,7 @@ export type RepetitionMode = 1 | 100;
 export interface VisibilityRow { readonly label: string; readonly value: string }
 export interface VisibilityModel {
   readonly publicComparison: readonly VisibilityRow[];
+  readonly publicComparisonCaption: string;
   readonly onChain: readonly VisibilityRow[];
   readonly localOnly: readonly VisibilityRow[];
   readonly lesson: string;
@@ -361,11 +443,15 @@ export function buildVisibilityModel(
 ): VisibilityModel;
 ```
 
-Map keys only to `onChain`; map amount, post-transfer balance, and both salts only to `localOnly`. For repetition `100`, keep the same single snapshot values but replace the lesson with an explicitly illustrative repeated-trail explanation.
+Map keys only to `onChain`; map amount, post-transfer balance, and both salts only to `localOnly`. Row values for amount and balance are unformatted decimal strings from `.toString()`; digit grouping is a panel-only concern. Set `publicComparisonCaption` to a non-empty comparison disclaimer for both repetition modes. For repetition `100`, keep the same single snapshot values but replace the lesson with an explicitly illustrative repeated-trail explanation.
 
 - [ ] **Step 4: Add failing source-copy assertions**
 
-Extend `privacy-copy.test.ts` to read `VisibilityPanel.tsx` and assert the three headings, `Public keys remain visible`, `Amounts remain hidden`, `Illustration only`, and no claim matching `recipient.*hidden on-chain`.
+Extend `privacy-copy.test.ts` to read `VisibilityPanel.tsx` and assert the three headings, `Public keys remain visible`, `Amounts remain hidden`, `Illustration only`, and no claim matching `recipient.*hidden on-chain`. Add this binding assertion so the panel cannot replace the tested model caption with independent JSX copy:
+
+```ts
+assert.match(visibilityPanel, /publicComparisonCaption/);
+```
 
 Run:
 
@@ -385,7 +471,7 @@ interface VisibilityPanelProps {
 }
 ```
 
-Render an empty state when null. Otherwise render `1 transfer` and `×100 transfers` buttons, the three responsive columns, the exact public/private lesson, and the proof-of-concept limitation. Use a display-only `shortHex` helper for long values; do not add copy-to-clipboard or persistence.
+Render an empty state when null. Otherwise render `1 transfer` and `×100 transfers` buttons, the three responsive columns, the exact public/private lesson, and the proof-of-concept limitation. Keep the three column headings static. Directly render `model.publicComparisonCaption` beneath the left heading without reconstructing or branching the caption in JSX. Use a display-only `shortHex` helper for long hex values and panel-only grouping for decimal values; do not add copy-to-clipboard or persistence.
 
 - [ ] **Step 6: Wire the Visibility tab**
 
