@@ -38,6 +38,16 @@ test('visibility panel binds the tested comparison caption and disclosure copy',
   assert.doesNotMatch(visibilityPanel, /recipient.*hidden on-chain/i);
 });
 
+test('automatic payment policy states its local-only boundary and PoC limitation', () => {
+  const policyPanel = read('../components/PolicyPanel.tsx');
+
+  assert.match(policyPanel, /Automatic Payment Policy/);
+  assert.match(policyPanel, /local policy inputs.*not put on-chain/i);
+  assert.match(policyPanel, /not a complete two-party payment/i);
+  assert.doesNotMatch(policyPanel, /AI agent/i);
+  assert.match(policyPanel, /type="password"/);
+});
+
 test('workshop script does not claim recipient anonymity or complete payment delivery', () => {
   const script = read('../../../demo/demo-script.md');
 

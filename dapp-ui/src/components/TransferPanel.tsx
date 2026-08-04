@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import type { CurrentTx } from '../hooks/useTransaction.js';
-import { deriveContractPublicKey } from '../midnight/witness.js';
+import { generateRandomRecipientHex } from '../midnight/recipient.js';
 import { TxResult } from './TxResult.js';
 
 interface TransferPanelProps {
@@ -10,14 +10,6 @@ interface TransferPanelProps {
   currentTx: CurrentTx | null;
   lastResult: TransactionResult | null;
   hasDeposited: boolean;
-}
-
-function generateRandomRecipient(): string {
-  const secretKey = crypto.getRandomValues(new Uint8Array(32));
-  const publicKey = deriveContractPublicKey(secretKey);
-  return Array.from(publicKey)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 export function TransferPanel({
@@ -95,7 +87,7 @@ export function TransferPanel({
             <div className="flex items-center justify-between mt-1">
               <p className="text-xs text-[#666]">{recipient.length}/64 characters</p>
               <button
-                onClick={() => setRecipient(generateRandomRecipient())}
+                onClick={() => setRecipient(generateRandomRecipientHex())}
                 className="text-xs text-[#0066ff] hover:text-[#0052cc]"
               >
                 Generate Random

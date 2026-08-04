@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useWallet } from './hooks/useWallet.js';
 import { useContract } from './hooks/useContract.js';
 import { useTransaction } from './hooks/useTransaction.js';
@@ -6,17 +6,26 @@ import { Header } from './components/Header.js';
 import { WalletPanel } from './components/WalletPanel.js';
 import { DepositPanel } from './components/DepositPanel.js';
 import { TransferPanel } from './components/TransferPanel.js';
+import { PolicyPanel } from './components/PolicyPanel.js';
 import { VisibilityPanel } from './components/VisibilityPanel.js';
 import { BalancePanel } from './components/BalancePanel.js';
+import {
+  runAutomaticPaymentPolicy,
+  type PolicyLogEntry,
+  type PolicyRunInput,
+} from './agent/runner.js';
 import type { TransactionResult } from './types/index.js';
 
-type Tab = 'wallet' | 'deposit' | 'transfer' | 'visibility' | 'explorer';
+type Tab = 'wallet' | 'deposit' | 'transfer' | 'policy' | 'visibility' | 'explorer';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('wallet');
   const [hasDeposited, setHasDeposited] = useState(false);
   const [lastDepositResult, setLastDepositResult] = useState<TransactionResult | null>(null);
   const [lastTransferResult, setLastTransferResult] = useState<TransactionResult | null>(null);
+  const [policyLogs, setPolicyLogs] = useState<readonly PolicyLogEntry[]>([]);
+  const [isPolicyRunning, setIsPolicyRunning] = useState(false);
+  const policyRunRef = useRef(false);
 
   const wallet = useWallet();
   const contractHook = useContract();
@@ -61,10 +70,31 @@ function App() {
     return txHook.checkBalance(contractHook.contract);
   }, [contractHook.contract, txHook]);
 
+  const handlePolicyRun = useCallback(async (input: PolicyRunInput) => {
+    if (!contractHook.contract || policyRunRef.current) return;
+    policyRunRef.current = true;
+    setIsPolicyRunning(true);
+    setPolicyLogs([]);
+    try {
+      await runAutomaticPaymentPolicy(
+        input,
+        {
+          readBalance: contractHook.contract.readPrivateBalance,
+          transfer: handleTransfer,
+        },
+        (entry) => setPolicyLogs((current) => [...current, entry]),
+      );
+    } finally {
+      policyRunRef.current = false;
+      setIsPolicyRunning(false);
+    }
+  }, [contractHook.contract, handleTransfer]);
+
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'wallet', label: 'Wallet', icon: '\uD83D\uDC5B' },
     { key: 'deposit', label: 'Deposit', icon: '\uD83D\uDCB0' },
     { key: 'transfer', label: 'Private Transfer', icon: '\uD83D\uDD12' },
+    { key: 'policy', label: 'Policy', icon: '\uD83E\uDDEA' },
     { key: 'visibility', label: 'Visibility', icon: '\uD83D\uDC41' },
     { key: 'explorer', label: 'Balance', icon: '\uD83D\uDD0D' },
   ];
@@ -81,6 +111,9 @@ function App() {
             setHasDeposited(false);
             setLastDepositResult(null);
             setLastTransferResult(null);
+            setPolicyLogs([]);
+            setIsPolicyRunning(false);
+            policyRunRef.current = false;
             setActiveTab('wallet');
           }
         }}
@@ -121,6 +154,9 @@ function App() {
               setHasDeposited(false);
               setLastDepositResult(null);
               setLastTransferResult(null);
+              setPolicyLogs([]);
+              setIsPolicyRunning(false);
+              policyRunRef.current = false;
               setActiveTab('wallet');
             }}
             onConnectContract={handleConnectContract}
@@ -151,6 +187,15 @@ function App() {
             currentTx={txHook.currentTx}
             lastResult={lastTransferResult}
             hasDeposited={hasDeposited}
+          />
+        )}
+        {activeTab === 'policy' && (
+          <PolicyPanel
+            contract={contractHook.contract}
+            hasDeposited={hasDeposited}
+            isRunning={isPolicyRunning}
+            logs={policyLogs}
+            onRun={handlePolicyRun}
           />
         )}
         {activeTab === 'visibility' && (
