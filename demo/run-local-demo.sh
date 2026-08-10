@@ -4,6 +4,8 @@ set -euo pipefail
 
 PORT=5173
 PROOF_SERVER="http://127.0.0.1:6300"
+INDEXER_ENDPOINT="${MIDNIGHT_INDEXER_URL:-https://indexer.preprod.midnight.network/api/v4/graphql}"
+INDEXER_MAX_AGE_SECONDS="${MIDNIGHT_INDEXER_MAX_AGE_SECONDS:-300}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOYMENT_JSON="${MIDNIGHT_DEPLOYMENT_JSON:-$REPO_ROOT/deploy-test/deployment.json}"
 
@@ -30,6 +32,23 @@ if curl -fsS -o /dev/null --max-time 5 "$PROOF_SERVER/health"; then
   ok "local proof server is responding"
 else
   fail "local proof server is not responding at $PROOF_SERVER"
+fi
+
+[[ "$INDEXER_MAX_AGE_SECONDS" =~ ^[1-9][0-9]*$ ]] \
+  || fail "MIDNIGHT_INDEXER_MAX_AGE_SECONDS must be a positive whole number"
+
+INDEXER_RESPONSE="$(curl -fsS --max-time 10 \
+  -H 'content-type: application/json' \
+  --data-binary '{"query":"query PreflightTip { block { timestamp } }"}' \
+  "$INDEXER_ENDPOINT")" \
+  || fail "Preprod Indexer did not return a response"
+
+if printf '%s' "$INDEXER_RESPONSE" \
+  | python3 "$REPO_ROOT/demo/check_indexer_freshness.py" \
+      --max-age-seconds "$INDEXER_MAX_AGE_SECONDS" >/dev/null; then
+  ok "Preprod Indexer tip is fresh"
+else
+  fail "Preprod Indexer tip is stale or malformed; refusing to start"
 fi
 
 [ -f "$DEPLOYMENT_JSON" ] || fail "deployment metadata not found; set MIDNIGHT_DEPLOYMENT_JSON"
