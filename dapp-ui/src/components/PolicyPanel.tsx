@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import type { PolicyLogEntry } from '../agent/runner.js';
-import { generateRandomRecipientHex } from '../midnight/recipient.js';
+import {
+  generateRandomRecipientHex,
+  isRecipientPublicKeyHex,
+  parseRecipientPublicKeyHex,
+} from '../midnight/recipient.js';
 import type { ContractContext } from '../types/index.js';
 
 interface PolicyPanelProps {
@@ -42,7 +46,7 @@ export function PolicyPanel({
     contract !== null &&
     hasDeposited &&
     !isRunning &&
-    /^[0-9a-fA-F]{64}$/.test(recipientHex);
+    isRecipientPublicKeyHex(recipientHex);
 
   const handleSubmit = async () => {
     setValidationError(null);
@@ -52,9 +56,7 @@ export function PolicyPanel({
         perTransferLimit: parsePositiveInteger(perTransferLimit, 'Per-transfer limit'),
         recipientHex: recipientHex.toLowerCase(),
       };
-      if (!/^[0-9a-f]{64}$/.test(input.recipientHex)) {
-        throw new Error('Recipient must be a 64-character hexadecimal public key.');
-      }
+      parseRecipientPublicKeyHex(input.recipientHex);
       await onRun(input);
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : String(error));

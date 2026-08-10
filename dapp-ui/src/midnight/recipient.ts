@@ -4,6 +4,22 @@ function defaultRandomBytes(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
 }
 
+export function isRecipientPublicKeyHex(value: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+export function parseRecipientPublicKeyHex(value: string): Uint8Array {
+  if (!isRecipientPublicKeyHex(value)) {
+    throw new Error('Recipient public key must be exactly 64 hexadecimal characters');
+  }
+
+  const bytes = new Uint8Array(32);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
 export function generateRandomRecipientHex(
   randomBytes: () => Uint8Array = defaultRandomBytes,
 ): string {

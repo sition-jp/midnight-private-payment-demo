@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import type { CurrentTx } from '../hooks/useTransaction.js';
-import { generateRandomRecipientHex } from '../midnight/recipient.js';
+import {
+  generateRandomRecipientHex,
+  isRecipientPublicKeyHex,
+} from '../midnight/recipient.js';
 import { TxResult } from './TxResult.js';
 
 interface TransferPanelProps {
@@ -22,16 +25,17 @@ export function TransferPanel({
   const [amount, setAmount] = useState('100');
   const [recipient, setRecipient] = useState('');
   const [result, setResult] = useState<TransactionResult | null>(lastResult);
+  const isRecipientValid = isRecipientPublicKeyHex(recipient);
 
   const isDisabled =
     !contract ||
     !hasDeposited ||
     (currentTx !== null && currentTx.status === 'pending') ||
-    recipient.length !== 64;
+    !isRecipientValid;
 
   const handleTransfer = async () => {
     const amountBigint = BigInt(amount || '0');
-    if (amountBigint <= 0n || recipient.length !== 64) return;
+    if (amountBigint <= 0n || !isRecipientValid) return;
     const txResult = await onTransfer(amountBigint, recipient);
     if (txResult) {
       setResult(txResult);
@@ -93,6 +97,11 @@ export function TransferPanel({
                 Generate Random
               </button>
             </div>
+            {recipient.length > 0 && !isRecipientValid && (
+              <p className="mt-1 text-xs text-red-400">
+                Recipient must be exactly 64 hexadecimal characters.
+              </p>
+            )}
           </div>
 
           <button
