@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { WalletMode, WalletContext } from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
 import { getSecretInputAttributes } from '../midnight/secret-input.js';
@@ -74,10 +74,6 @@ export function WalletPanel({
 }: WalletPanelProps) {
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   const seedInputAttributes = getSecretInputAttributes(isSeedRevealed);
-
-  useEffect(() => {
-    if (seed.length === 0) setIsSeedRevealed(false);
-  }, [seed]);
 
   // Connected state
   if (walletContext) {
@@ -182,7 +178,10 @@ export function WalletPanel({
               <input
                 {...seedInputAttributes}
                 value={seed}
-                onChange={(e) => onSeedChange(e.target.value)}
+                onChange={(e) => {
+                  if (seed.length === 0) setIsSeedRevealed(false);
+                  onSeedChange(e.target.value);
+                }}
                 placeholder="Enter 64-character hex seed..."
                 aria-label="Disposable demo seed"
                 autoCapitalize="none"
@@ -212,7 +211,10 @@ export function WalletPanel({
               Generate Random Seed
             </button>
             <button
-              onClick={onConnect}
+              onClick={() => {
+                setIsSeedRevealed(false);
+                onConnect();
+              }}
               disabled={isConnectingWallet || seed.length !== 64}
               className="bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-1"
             >
