@@ -182,6 +182,46 @@ test('aborting wallet synchronization stops the active wallet without waiting fo
   assert.equal(stopCalls, 1);
 });
 
+test('a wallet start that finishes after cancellation never enters the sync wait', async () => {
+  const controller = new AbortController();
+  let resolveStart: (() => void) | undefined;
+  let resolveLateStop: (() => void) | undefined;
+  let waitCalls = 0;
+  let stopCalls = 0;
+  const start = new Promise<void>((resolve) => {
+    resolveStart = resolve;
+  });
+  const lateStop = new Promise<void>((resolve) => {
+    resolveLateStop = resolve;
+  });
+
+  const operation = runWalletSyncLifecycle({
+    start: () => start,
+    waitForSyncedState: async () => {
+      waitCalls += 1;
+      return 'unexpected';
+    },
+    stop: async () => {
+      stopCalls += 1;
+      if (stopCalls === 2) resolveLateStop?.();
+    },
+  }, {
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 120_000,
+    signal: controller.signal,
+  });
+
+  controller.abort();
+  await assert.rejects(operation, WalletSyncCancelledError);
+  assert.equal(stopCalls, 1);
+
+  resolveStart?.();
+  await lateStop;
+
+  assert.equal(waitCalls, 0);
+  assert.equal(stopCalls, 2);
+});
+
 test('wallet lifecycle keeps waiting while applied positions continue to advance', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let listener: ((value: ReturnType<typeof progress>) => void) | undefined;

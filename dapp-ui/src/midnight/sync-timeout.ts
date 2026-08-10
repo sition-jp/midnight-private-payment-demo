@@ -219,6 +219,7 @@ export async function runWalletSyncLifecycle<T>(
     await lifecycle.start();
     startupCompleted = true;
     if (deadlineExceeded) throw timeoutError;
+    if (cancelled) throw new WalletSyncCancelledError();
     return lifecycle.waitForSyncedState();
   })();
 

@@ -157,7 +157,7 @@ export function useWallet(): UseWalletReturn {
 
   useEffect(() => () => {
     attemptRef.current += 1;
-    void lifecycleRef.current?.disconnect();
+    void lifecycleRef.current?.disconnect().catch(() => undefined);
   }, []);
 
   return {
