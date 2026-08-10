@@ -51,9 +51,10 @@ The application exposes six tabs:
    - Enter the disposable seed locally and connect.
    - Wait until Shielded, Unshielded, and DUST synchronization reaches the exact tip.
    - Connect to the deployed contract.
-2. **Deposit**
-   - Submit a Preprod deposit.
-   - Explain that the deposit amount is public while the stored balance value is hidden.
+2. **Initialize demo balance**
+   - Submit the Preprod `deposit` circuit call.
+   - Explain that the initialization amount is public while the stored balance value is hidden.
+   - State that this does not move wallet tNIGHT into the contract.
 3. **Private Transfer**
    - Generate a disposable recipient public key.
    - Submit one hidden-amount transfer.

@@ -147,7 +147,7 @@ let s6 = pres.addSlide();
 s6.background = { color: BLACK };
 addHeader(s6, "Part 2: MCPセットアップ", "ターミナルにコピペしてください");
 
-addCopyBlock(s6, "Step 1: プロジェクト作成 & MCP設定ファイル作成", 'mkdir midnight-workshop\ncd midnight-workshop\n\ncat > .mcp.json << \'EOF\'\n{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@latest"]\n    }\n  }\n}\nEOF', 0.6, 1.4, 5.0, 3.2);
+addCopyBlock(s6, "Step 1: プロジェクト作成 & MCP設定ファイル作成", 'mkdir midnight-workshop\ncd midnight-workshop\n\ncat > .mcp.json << \'EOF\'\n{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@0.3.0"]\n    }\n  }\n}\nEOF', 0.6, 1.4, 5.0, 3.2);
 
 s6.addText("ポイント", { x: 6.0, y: 1.4, w: 3.4, h: 0.3, fontSize: 16, color: WHITE, bold: true, margin: 0 });
 s6.addText([

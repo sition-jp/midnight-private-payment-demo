@@ -121,7 +121,7 @@ cat > .mcp.json << 'EOF'
   "mcpServers": {
     "midnight": {
       "command": "npx",
-      "args": ["-y", "midnight-mcp@latest"]
+      "args": ["-y", "midnight-mcp@0.3.0"]
     }
   }
 }
@@ -393,7 +393,7 @@ cat > .mcp.json << 'EOF'
   "mcpServers": {
     "midnight": {
       "command": "npx",
-      "args": ["-y", "midnight-mcp@latest"]
+      "args": ["-y", "midnight-mcp@0.3.0"]
     }
   }
 }

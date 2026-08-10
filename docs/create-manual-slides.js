@@ -113,7 +113,7 @@ s5.addText([
 ], { x: 0.6, y: 1.5, w: 8.8, h: 1.6, margin: 0 });
 
 s5.addText(".mcp.json をプロジェクトルートに作成", { x: 0.6, y: 3.3, w: 8.8, h: 0.3, fontSize: 14, color: WHITE, bold: true, margin: 0 });
-addCodeBlock(s5, '{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@latest"]\n    }\n  }\n}', 0.6, 3.7, 5.0, 1.6);
+addCodeBlock(s5, '{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@0.3.0"]\n    }\n  }\n}', 0.6, 3.7, 5.0, 1.6);
 
 s5.addText("たった3行の設定で\n60秒セットアップ完了", { x: 6.0, y: 3.7, w: 3.4, h: 1.0, fontSize: 18, color: BLUE, bold: true, margin: 0 });
 

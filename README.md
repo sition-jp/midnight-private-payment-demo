@@ -4,6 +4,8 @@ Midnight MCPを使ってCompact（ZKP）コントラクトを生成し、金額�
 
 この契約が秘匿するのは送金額・残高の実値・saltです。送信者と受取人の公開鍵はチェーン上に残り、`check_balance()`は残高を公開します。受取人へprivate stateを配送する経路はないため、実用的な二者間決済ではありません。
 
+`deposit` 回路は公開額でデモ用の内部残高コミットメントを初期化します。ウォレットのtNIGHTをコントラクトへ移動する処理ではありません。
+
 ## Quick Start
 
 1. 環境チェック: `bash setup/setup-check.sh`

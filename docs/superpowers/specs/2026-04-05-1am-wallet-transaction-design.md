@@ -163,8 +163,9 @@ Or preferably, use the URLs from `getConfiguration()` dynamically.
 ## Transaction Flow (Wallet Mode)
 
 ```
-User clicks "Deposit 100 tNIGHT"
+User clicks "Initialize demo balance (100)"
   → contract.callTx.deposit(100n)
+    → updates the demo balance commitment; no wallet tNIGHT moves into the contract
     → midnight-js-contracts builds unsigned transaction
     → walletProvider.balanceTx(tx)
       → 1AM balanceUnsealedTransaction(tx)  ← 1AM handles UTXO selection + signing

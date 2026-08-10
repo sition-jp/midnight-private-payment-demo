@@ -92,7 +92,7 @@ function App() {
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'wallet', label: 'Wallet', icon: '\uD83D\uDC5B' },
-    { key: 'deposit', label: 'Deposit', icon: '\uD83D\uDCB0' },
+    { key: 'deposit', label: 'Initialize Balance', icon: '\uD83D\uDCB0' },
     { key: 'transfer', label: 'Private Transfer', icon: '\uD83D\uDD12' },
     { key: 'policy', label: 'Policy', icon: '\uD83E\uDDEA' },
     { key: 'visibility', label: 'Visibility', icon: '\uD83D\uDC41' },

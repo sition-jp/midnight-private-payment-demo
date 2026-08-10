@@ -13,7 +13,7 @@ function statusIcon(status: string): string {
 }
 
 function typeLabel(type: string): string {
-  if (type === 'deposit') return 'Deposit';
+  if (type === 'deposit') return 'Balance Initialization';
   if (type === 'transfer') return 'Private Transfer';
   if (type === 'balance') return 'Check Balance';
   return type;

@@ -112,7 +112,7 @@ export function TransferPanel({
             {!contract
               ? 'Connect wallet & contract first'
               : !hasDeposited
-                ? 'Make a deposit first'
+                ? 'Initialize demo balance first'
                 : 'Submit Hidden-Amount Transfer'}
           </button>
 

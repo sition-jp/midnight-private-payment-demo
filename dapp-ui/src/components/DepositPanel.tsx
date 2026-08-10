@@ -31,10 +31,11 @@ export function DepositPanel({ contract, onDeposit, currentTx, lastResult }: Dep
   return (
     <div className="space-y-4">
       <div className="bg-[#16213e] rounded-lg p-6">
-        <h2 className="text-xl font-bold text-white mb-2">Deposit tNight</h2>
+        <h2 className="text-xl font-bold text-white mb-2">Initialize Demo Balance</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          The deposit amount is public. The contract stores a commitment keyed by your public key;
-          the balance value remains hidden.
+          The initialization amount is public. This demo call updates the contract's balance
+          commitment; it does not move wallet tNIGHT into the contract. The balance value remains
+          hidden.
         </p>
 
         <div className="space-y-4">
@@ -55,7 +56,7 @@ export function DepositPanel({ contract, onDeposit, currentTx, lastResult }: Dep
             disabled={isDisabled}
             className="w-full bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {!contract ? 'Connect wallet & contract first' : 'Deposit'}
+            {!contract ? 'Connect wallet & contract first' : 'Initialize Balance'}
           </button>
         </div>
       </div>

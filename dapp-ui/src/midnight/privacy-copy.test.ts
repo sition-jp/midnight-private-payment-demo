@@ -14,8 +14,11 @@ test('workshop UI states the exact disclosure boundary', () => {
   const txResult = read('../components/TxResult.tsx');
   const walletPanel = read('../components/WalletPanel.tsx');
 
-  assert.match(depositPanel, /deposit amount is public/i);
-  assert.match(depositPanel, /balance value remains hidden/i);
+  assert.match(depositPanel, /initialization amount is public/i);
+  assert.match(depositPanel, /does not move wallet tNIGHT into the contract/i);
+  assert.match(depositPanel, /balance value remains\s+hidden/i);
+  assert.match(depositPanel, /Initialize Demo Balance/);
+  assert.doesNotMatch(depositPanel, /Deposit tNight/i);
   assert.match(transferPanel, /amount is hidden; sender and\s+recipient public keys remain visible on-chain/i);
   assert.match(transferPanel, /not a complete\s+two-party payment/i);
   assert.match(transferPanel, /type="password"/);
@@ -27,6 +30,22 @@ test('workshop UI states the exact disclosure boundary', () => {
   assert.match(walletPanel, /disposable Preprod demo seed/i);
   assert.match(walletPanel, /never use a real wallet seed/i);
   assert.match(walletPanel, /getSecretInputAttributes/);
+});
+
+test('public MCP instructions pin the reviewed package instead of a moving tag', () => {
+  const sources = [
+    '../../../.mcp.json',
+    '../../../docs/manual.md',
+    '../../../docs/create-manual-slides.js',
+    '../../../docs/create-manual-v2-slides.js',
+    '../../../demo/demo-script.md',
+  ] as const;
+
+  for (const relativePath of sources) {
+    const source = read(relativePath);
+    assert.doesNotMatch(source, /midnight-mcp@latest/);
+    assert.match(source, /midnight-mcp@0\.3\.0/);
+  }
 });
 
 test('visibility panel binds the tested comparison caption and disclosure copy', () => {

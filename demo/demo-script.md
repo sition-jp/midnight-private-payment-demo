@@ -43,7 +43,7 @@ ZKPというと、暗号数学の専門知識が必要で、開発ハードル�
 
 （.mcp.jsonを表示しながら）
 
-「mcpServers の名前、コマンドにnpx、パッケージ名midnight-mcp。これだけです。この3行を書けば、Claude CodeがMidnightの29個のAPIツールに直接アクセスできるようになります。Nodeさえ入っていれば、追加インストールは不要です。」
+「mcpServers の名前、コマンドにnpx、パッケージ名midnight-mcp@0.3.0。これだけです。この3行を書けば、Claude CodeがMidnightの29個のAPIツールに直接アクセスできるようになります。Nodeさえ入っていれば、追加インストールは不要です。」
 
 （Claude Codeをこのフォルダで起動）
 
@@ -239,7 +239,7 @@ SIPOではMidnight Ambassadorとして、このMCP×AI開発のワークショ�
 
 | 状況 | 対応 |
 |------|------|
-| MCPサーバーが起動しない | `npx midnight-mcp@latest` を直接実行してエラーを確認。Node.jsバージョン確認（v18以上必要） |
+| MCPサーバーが起動しない | `npx midnight-mcp@0.3.0` を直接実行してエラーを確認。Node.jsバージョン確認（v20以上必要） |
 | Claude Codeがフリーズ | Ctrl+C で中断して再入力。「先ほどのコントラクトを使って続けましょう」と説明 |
 | コンパイラに繋がらない | バックアップスクリーンショットを表示してデモを継続 |
 | ネットワーク全断 | 事前生成済みの `contracts/private-payment/private_payment.compact` を開いてコード解説のみ実施 |

@@ -137,7 +137,7 @@ export function PolicyPanel({
             {!contract
               ? 'Connect wallet & contract first'
               : !hasDeposited
-                ? 'Make a deposit first'
+                ? 'Initialize demo balance first'
                 : isRunning
                   ? 'Evaluating & submitting...'
                   : 'Evaluate Policy'}
