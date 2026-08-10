@@ -104,18 +104,15 @@ function App() {
       <Header
         mode={wallet.mode}
         onModeChange={(m) => {
-          wallet.setMode(m);
-          if (wallet.walletContext) {
-            wallet.disconnect();
-            contractHook.disconnect();
-            setHasDeposited(false);
-            setLastDepositResult(null);
-            setLastTransferResult(null);
-            setPolicyLogs([]);
-            setIsPolicyRunning(false);
-            policyRunRef.current = false;
-            setActiveTab('wallet');
-          }
+          void wallet.setMode(m);
+          contractHook.disconnect();
+          setHasDeposited(false);
+          setLastDepositResult(null);
+          setLastTransferResult(null);
+          setPolicyLogs([]);
+          setIsPolicyRunning(false);
+          policyRunRef.current = false;
+          setActiveTab('wallet');
         }}
         walletContext={wallet.walletContext}
       />
@@ -149,7 +146,7 @@ function App() {
             onGenerateSeed={wallet.generateRandomSeed}
             onConnect={wallet.connect}
             onDisconnect={() => {
-              wallet.disconnect();
+              void wallet.disconnect();
               contractHook.disconnect();
               setHasDeposited(false);
               setLastDepositResult(null);

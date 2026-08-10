@@ -18,6 +18,14 @@ export interface WalletSyncTimeoutOptions {
   readonly absoluteTimeoutMs: number;
   readonly progressReportIntervalMs?: number;
   readonly onProgress?: (progress: WalletSyncProgressSnapshot) => void;
+  readonly signal?: AbortSignal;
+}
+
+export class WalletSyncCancelledError extends Error {
+  constructor() {
+    super('Preprod wallet synchronization was cancelled.');
+    this.name = 'WalletSyncCancelledError';
+  }
 }
 
 export class WalletSyncTimeoutError extends Error {
@@ -121,7 +129,12 @@ export async function runWalletSyncLifecycle<T>(
   timeoutOptions: number | WalletSyncTimeoutOptions,
 ): Promise<T> {
   const options = normalizeTimeoutOptions(timeoutOptions);
+  if (options.signal?.aborted) {
+    await lifecycle.stop();
+    throw new WalletSyncCancelledError();
+  }
   let deadlineExceeded = false;
+  let cancelled = false;
   let startupCompleted = false;
   let timeoutError: WalletSyncTimeoutError | undefined;
   let idleTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -136,6 +149,16 @@ export async function runWalletSyncLifecycle<T>(
   const progressFailure = new Promise<never>((_resolve, reject) => {
     rejectProgressFailure = reject;
   });
+  let rejectCancellation: ((error: WalletSyncCancelledError) => void) | undefined;
+  const cancellation = new Promise<never>((_resolve, reject) => {
+    rejectCancellation = reject;
+  });
+  const abortListener = () => {
+    if (cancelled) return;
+    cancelled = true;
+    rejectCancellation?.(new WalletSyncCancelledError());
+  };
+  options.signal?.addEventListener('abort', abortListener, { once: true });
 
   const failForTimeout = (reason: WalletSyncTimeoutReason, timeoutMs: number) => {
     if (deadlineExceeded) return;
@@ -200,9 +223,9 @@ export async function runWalletSyncLifecycle<T>(
   })();
 
   try {
-    return await Promise.race([operation, deadline, progressFailure]);
+    return await Promise.race([operation, deadline, progressFailure, cancellation]);
   } catch (error) {
-    if (deadlineExceeded && !startupCompleted) {
+    if ((deadlineExceeded || cancelled) && !startupCompleted) {
       void operation
         .finally(async () => {
           try {
@@ -229,6 +252,7 @@ export async function runWalletSyncLifecycle<T>(
   } finally {
     if (idleTimeoutId !== undefined) clearTimeout(idleTimeoutId);
     if (absoluteTimeoutId !== undefined) clearTimeout(absoluteTimeoutId);
+    options.signal?.removeEventListener('abort', abortListener);
     unsubscribeProgress?.();
   }
 }

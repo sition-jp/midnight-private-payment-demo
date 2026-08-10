@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   isIdleWalletSyncTimeout,
   runWalletSyncLifecycle,
+  WalletSyncCancelledError,
   WalletSyncTimeoutError,
   withWalletSyncTimeout,
 } from './sync-timeout.ts';
@@ -155,6 +156,29 @@ test('wallet lifecycle fails closed when the progress stream errors', async () =
     /progress stream failed/,
   );
 
+  assert.equal(stopCalls, 1);
+});
+
+test('aborting wallet synchronization stops the active wallet without waiting for timeout', async () => {
+  const controller = new AbortController();
+  let stopCalls = 0;
+
+  const operation = runWalletSyncLifecycle({
+    start: async () => undefined,
+    waitForSyncedState: () => new Promise<never>(() => {}),
+    stop: async () => {
+      stopCalls += 1;
+    },
+  }, {
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 120_000,
+    signal: controller.signal,
+  });
+
+  await Promise.resolve();
+  controller.abort();
+
+  await assert.rejects(operation, WalletSyncCancelledError);
   assert.equal(stopCalls, 1);
 });
 

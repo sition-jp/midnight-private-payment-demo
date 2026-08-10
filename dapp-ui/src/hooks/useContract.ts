@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { WalletContext, ContractContext } from '../types/index.js';
 import { connectToContract } from '../midnight/contract.js';
 import { requireContractAddress } from '../midnight/config.js';
@@ -15,8 +15,10 @@ export function useContract(): UseContractReturn {
   const [contract, setContract] = useState<ContractContext | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const generationRef = useRef(0);
 
   const connect = useCallback(async (walletContext: WalletContext) => {
+    const generation = ++generationRef.current;
     setIsConnecting(true);
     setError(null);
     try {
@@ -27,16 +29,20 @@ export function useContract(): UseContractReturn {
         requireContractAddress(),
         secretKey,
       );
-      setContract(ctx);
+      if (generation === generationRef.current) setContract(ctx);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (generation === generationRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setIsConnecting(false);
+      if (generation === generationRef.current) setIsConnecting(false);
     }
   }, []);
 
   const disconnect = useCallback(() => {
+    generationRef.current += 1;
     setContract(null);
+    setIsConnecting(false);
     setError(null);
   }, []);
 

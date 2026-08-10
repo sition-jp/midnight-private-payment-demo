@@ -24,6 +24,7 @@ import { MIDNIGHT_CONFIG } from './config.js';
 import {
   isIdleWalletSyncTimeout,
   runWalletSyncLifecycle,
+  WalletSyncCancelledError,
   WalletSyncTimeoutError,
   type WalletSyncProgressSnapshot,
 } from './sync-timeout.js';
@@ -94,6 +95,11 @@ export interface DemoWalletSyncOptions {
   readonly idleTimeoutMs?: number;
   readonly absoluteTimeoutMs?: number;
   readonly onProgress?: (progress: WalletSyncProgressSnapshot) => void;
+  readonly signal?: AbortSignal;
+}
+
+function throwIfWalletSyncCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new WalletSyncCancelledError();
 }
 
 function readWalletSyncProgress(
@@ -194,6 +200,10 @@ async function synchronizeDemoWallet(
     }
     throw error;
   }
+  if (options.signal?.aborted) {
+    await internal.wallet.stop();
+    throw new WalletSyncCancelledError();
+  }
 
   const checkpoints = saveCheckpoint
     ? startPeriodicDemoWalletCheckpoints({
@@ -232,6 +242,7 @@ async function synchronizeDemoWallet(
       absoluteTimeoutMs: options.absoluteTimeoutMs ?? DEMO_WALLET_ABSOLUTE_TIMEOUT_MS,
       progressReportIntervalMs: DEMO_WALLET_PROGRESS_REPORT_INTERVAL_MS,
       onProgress: options.onProgress,
+      signal: options.signal,
     });
   } finally {
     await checkpoints?.stop();
@@ -366,6 +377,10 @@ export async function createWalletFromSeed(
     shouldDiscardCachedState: shouldDiscardRestoredWalletState,
   });
   const { internal, state } = synchronized;
+  if (options.signal?.aborted) {
+    await internal.wallet.stop();
+    throw new WalletSyncCancelledError();
+  }
 
   try {
     await promoteSynchronizedDemoWalletState(cache.storage, cache.cacheKey, internal);
@@ -459,8 +474,9 @@ export function getDetectedWalletName(): string {
 }
 
 /** Connect to wallet browser extension (Lace or 1AM) */
-export async function connectLace(): Promise<WalletContext> {
+export async function connectLace(signal?: AbortSignal): Promise<WalletContext> {
   ensureNetworkId();
+  throwIfWalletSyncCancelled(signal);
 
   const m = window.midnight as Record<string, unknown> | undefined;
   const walletApi = (m?.['1am'] || m?.mnLace) as InitialAPI | undefined;
@@ -470,7 +486,9 @@ export async function connectLace(): Promise<WalletContext> {
   }
 
   const connectedWallet = await walletApi.connect('preprod');
+  throwIfWalletSyncCancelled(signal);
   const walletState = await readRequiredWalletState(connectedWallet);
+  throwIfWalletSyncCancelled(signal);
 
   return {
     mode: 'lace',
