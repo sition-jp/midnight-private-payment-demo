@@ -69,14 +69,14 @@ export interface WalletContext {
 
 - [ ] **Step 2: Verify TypeScript compiles**
 
-Run: `cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo/dapp-ui && npx tsc --noEmit 2>&1 | head -20`
+Run from the repository root: `cd dapp-ui && npx tsc --noEmit 2>&1 | head -20`
 
 Expected: No new errors introduced (existing errors may be present).
 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add dapp-ui/src/types/index.ts
 git commit -m "feat: add rawWalletApi to WalletContext type for 1AM integration"
 ```
@@ -196,14 +196,14 @@ Find and remove the line `(window as any).__1amWallet = connectedWallet;` that w
 
 - [ ] **Step 3: Verify TypeScript compiles**
 
-Run: `cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo/dapp-ui && npx tsc --noEmit 2>&1 | head -20`
+Run from the repository root: `cd dapp-ui && npx tsc --noEmit 2>&1 | head -20`
 
 Expected: No new errors.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add dapp-ui/src/midnight/wallet.ts
 git commit -m "feat: rewrite connectLace() with full 1AM API integration and balance fix"
 ```
@@ -289,14 +289,14 @@ To:
 
 - [ ] **Step 3: Verify TypeScript compiles**
 
-Run: `cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo/dapp-ui && npx tsc --noEmit 2>&1 | head -20`
+Run from the repository root: `cd dapp-ui && npx tsc --noEmit 2>&1 | head -20`
 
 Expected: No new errors.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add dapp-ui/src/midnight/contract.ts
 git commit -m "feat: add create1AMProviders() for Proof Server-free wallet mode"
 ```
@@ -362,7 +362,7 @@ function formatBalance(bal: bigint): string {
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add dapp-ui/src/components/WalletPanel.tsx
 git commit -m "fix: format tNight balance with correct decimal places"
 ```
@@ -375,7 +375,7 @@ git commit -m "fix: format tNight balance with correct decimal places"
 
 - [ ] **Step 1: Start the DApp dev server**
 
-Run: `cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo/dapp-ui && npm run dev`
+Run from the repository root: `cd dapp-ui && npm run dev`
 
 Verify: Dev server starts on `http://localhost:5173`
 
@@ -385,7 +385,7 @@ Verify: Dev server starts on `http://localhost:5173`
 2. Click "Wallet Mode"
 3. Click "Connect Wallet Extension"
 4. Approve in 1AM popup
-5. Verify: Address shows `mn_addr_pr...xqh2s2am`, Balance shows `1,000` (or similar non-zero value), Mode shows `1AM`
+5. Verify only the connection state and `1AM` mode; do not record or publish the address or balance.
 
 - [ ] **Step 3: Connect to Contract**
 
@@ -422,7 +422,7 @@ const proofProvider = {
 - [ ] **Step 5: Commit any fixes**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add -A
 git commit -m "fix: resolve 1AM provider integration issues"
 ```
@@ -451,7 +451,7 @@ git commit -m "fix: resolve 1AM provider integration issues"
 2. Enter transfer details (amount, recipient)
 3. Click "Transfer" button
 4. Wait for completion
-5. Expected: Transaction hash with explorer link, amount and recipient hidden via ZKP
+5. Expected: Transaction hash with explorer link; amount hidden, sender and recipient public keys visible on-chain
 
 - [ ] **Step 3: Check Balance**
 
@@ -468,7 +468,7 @@ git commit -m "fix: resolve 1AM provider integration issues"
 - [ ] **Step 5: Commit final state**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add -A
 git commit -m "feat: 1AM wallet transaction execution verified end-to-end"
 ```
@@ -489,12 +489,12 @@ Search for and remove:
 
 - [ ] **Step 2: Final compile check**
 
-Run: `cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo/dapp-ui && npx tsc --noEmit 2>&1 | head -20`
+Run from the repository root: `cd dapp-ui && npx tsc --noEmit 2>&1 | head -20`
 
 - [ ] **Step 3: Final commit**
 
 ```bash
-cd /Users/sition/Documents/SITION/DEV/midnight-mcp-demo
+cd midnight-private-payment-demo
 git add -A
 git commit -m "chore: cleanup debug code from 1AM integration"
 ```

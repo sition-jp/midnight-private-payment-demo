@@ -187,7 +187,7 @@ let s8 = pres.addSlide();
 s8.background = { color: BLACK };
 addHeader(s8, "Part 3: コントラクト生成", "Claude Codeにコピペしてください");
 
-addCopyBlock(s8, "プロンプト② コントラクト生成", "Compact言語で、送金額と送金先を非公開にした\nプライベート決済コントラクトを作成してください。\n\n要件:\n- 送金額（amount）は非公開（witness）\n- 送金先（recipient）は非公開（witness）\n- 残高の正当性はZKPで証明\n- 残高不足の場合はエラー\n- contracts/ フォルダに保存してください", 0.6, 1.4, 8.8, 2.6);
+addCopyBlock(s8, "プロンプト② コントラクト生成", "Compact言語で、送金額と残高実値を非公開にし、\n送信者と受取人の公開鍵を公開する残高更新\nコントラクトを作成してください。\n\n要件:\n- 送金額（amount）は非公開（witness）\n- 両者の公開鍵は disclose() して公開\n- 残高の正当性はZKPで証明\n- 残高不足の場合はエラー", 0.6, 1.4, 8.8, 2.6);
 
 s8.addText("→ 何もせず待ってください。MCPが自動で動きます。", { x: 0.6, y: 4.2, w: 8.8, h: 0.3, fontSize: 16, color: BLUE, bold: true, margin: 0 });
 s8.addText([
@@ -207,8 +207,8 @@ s9.addText("→ 以下の3層構造が解説されます:", { x: 0.6, y: 2.8, w:
 // 3 columns
 const cols = [
   { title: "ledger", color: BLUE, desc: "チェーン上に保存\n\nbalance_commitments\n= ハッシュ値のみ\n\n実際の金額は非公開" },
-  { title: "witness", color: "ff4444", desc: "ローカルのみ・非公開\n\nlocal_secret_key\nprivate_amount\nprivate_recipient\n\nチェーンに絶対に乗らない" },
-  { title: "circuit", color: "44ff44", desc: "処理ロジック\n\ndeposit = 入金（公開）\nprivate_transfer\n= ZKP送金（非公開）\ncheck_balance\n= 残高確認（非公開）" }
+  { title: "witness", color: "ff4444", desc: "ローカル入力\n\nlocal_secret_key\nprivate_amount\nprivate_recipient\n\nrecipient公開鍵は\ndisclose()で公開" },
+  { title: "circuit", color: "44ff44", desc: "処理ロジック\n\ndeposit = 公開額で更新\nprivate_transfer\n= 金額秘匿・公開鍵公開\ncheck_balance\n= 残高を公開" }
 ];
 cols.forEach((c, i) => {
   const x = 0.6 + i * 3.2;
@@ -256,8 +256,8 @@ s11.addText("説明", { x: 5.8, y: 3.0, w: 3.6, h: 0.4, fontSize: 14, color: WHI
 
 const circuits = [
   { name: "deposit", type: "公開", desc: "残高のコミットをチェーンに登録" },
-  { name: "private_transfer", type: "ZKP", desc: "金額・宛先を秘匿したまま送金" },
-  { name: "check_balance", type: "プライベート", desc: "自分の残高を確認（他者非公開）" }
+  { name: "private_transfer", type: "ZKP", desc: "金額を秘匿し、両者の公開鍵を開示して残高更新" },
+  { name: "check_balance", type: "公開出力", desc: "呼び出すと残高の実値を公開" }
 ];
 circuits.forEach((c, i) => {
   const y = 3.4 + i * 0.5;
@@ -268,7 +268,10 @@ circuits.forEach((c, i) => {
   s11.addText(c.desc, { x: 5.8, y: y, w: 3.6, h: 0.5, fontSize: 13, color: GRAY, valign: "middle", margin: 0 });
 });
 
-addCopyBlock(s11, "プロンプト⑥ セキュリティレビュー（オプション）", "このコントラクトのセキュリティレビューを\n実施してください", 0.6, 4.6, 8.8, 0.9);
+s11.addText(
+  "任意プロンプト⑥：このコントラクトのセキュリティレビューを実施してください",
+  { x: 0.6, y: 5.05, w: 8.8, h: 0.3, fontSize: 12, color: BLUE, margin: 0 },
+);
 
 // ── Slide 12: Part 5 デプロイ ──
 let s12 = pres.addSlide();
@@ -390,7 +393,7 @@ s17.addText([
 s17.addText("ご質問はお気軽にどうぞ", { x: 0.6, y: 4.6, w: 8.8, h: 0.4, fontSize: 16, color: GRAY, margin: 0 });
 
 // Save
-const outputPath = "/Users/sition/Documents/SITION/DEV/midnight-mcp-demo/docs/midnight-mcp-manual-v2.pptx";
+const outputPath = require("node:path").join(__dirname, "midnight-mcp-manual-v2.pptx");
 pres.writeFile({ fileName: outputPath }).then(() => {
   console.log("Created: " + outputPath);
   console.log("Slides: " + pres.slides.length);

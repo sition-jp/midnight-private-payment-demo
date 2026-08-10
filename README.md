@@ -1,6 +1,8 @@
-# Midnight MCP Demo — 60秒で始めるZKP開発
+# Midnight Private Balance Demo — 60秒で始めるZKP開発
 
-Midnight MCPを使って、AIでCompact（ZKP）コントラクトを生成・デプロイするデモ環境。
+Midnight MCPを使ってCompact（ZKP）コントラクトを生成し、金額を秘匿した残高更新をPreprodで確認する概念実証です。
+
+この契約が秘匿するのは送金額・残高の実値・saltです。送信者と受取人の公開鍵はチェーン上に残り、`check_balance()`は残高を公開します。受取人へprivate stateを配送する経路はないため、実用的な二者間決済ではありません。
 
 ## Quick Start
 
@@ -22,4 +24,4 @@ Midnight MCPを使って、AIでCompact（ZKP）コントラクトを生成・�
 - [Midnight MCP](https://github.com/Olanetsoft/midnight-mcp)
 - [Compact Reference](https://docs.midnight.network/compact/reference/compact-reference)
 - [Preprod Explorer](https://preprod.midnightexplorer.com/)
-- [Testnet Faucet](https://midnight.network/test-faucet)
+- [Preprod Faucet](https://midnight-tmnight-preprod.nethermind.dev/)

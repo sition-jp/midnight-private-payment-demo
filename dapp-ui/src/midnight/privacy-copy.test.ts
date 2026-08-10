@@ -57,3 +57,47 @@ test('workshop script does not claim recipient anonymity or complete payment del
   assert.doesNotMatch(script, /送金先アドレスもない/);
   assert.doesNotMatch(script, /誰に送ったかは誰にもわからない/);
 });
+
+test('all public workshop sources preserve the contract disclosure boundary', () => {
+  const publicSources = [
+    '../../../README.md',
+    '../../../demo/demo-script.md',
+    '../../../deploy-test/README.md',
+    '../../../deploy-test/src/transfer-test.ts',
+    '../../../docs/manual.md',
+    '../../../docs/create-manual-slides.js',
+    '../../../docs/create-manual-v2-slides.js',
+    '../../../docs/create-slides.js',
+    '../../../docs/superpowers/plans/2026-04-05-1am-wallet-transactions.md',
+  ] as const;
+
+  for (const relativePath of publicSources) {
+    const normalized = read(relativePath).replaceAll('\\n', ' ').replace(/\s+/g, ' ');
+
+    assert.doesNotMatch(
+      normalized,
+      /送金額.{0,30}送金先.{0,30}(?:非公開|見せない)/,
+      `${relativePath} must not claim that the recipient is hidden`,
+    );
+    assert.doesNotMatch(
+      normalized,
+      /送金先(?:アドレス|（recipient）)?.{0,30}(?:チェーン非公開|非公開（witness）)/,
+      `${relativePath} must not describe the recipient public key as chain-private`,
+    );
+    assert.doesNotMatch(
+      normalized,
+      /金額.{0,20}(?:相手先|宛先).{0,30}(?:非公開|秘匿)/,
+      `${relativePath} must not group the public recipient key with the hidden amount`,
+    );
+    assert.doesNotMatch(
+      normalized,
+      /(?:amount and recipient|recipient).{0,40}hidden(?: via ZKP| on-chain)?/i,
+      `${relativePath} must not claim recipient anonymity in English`,
+    );
+    assert.doesNotMatch(
+      normalized,
+      /check_balance.{0,50}(?:プライベート(?:な)?残高|非公開(?:の)?残高|private balance)/i,
+      `${relativePath} must state that check_balance discloses its result`,
+    );
+  }
+});

@@ -197,7 +197,7 @@ s12.addText([
   { text: "3. MCPがコンパイル → エラーも自動修正", options: { fontSize: 16, color: WHITE, breakLine: true } },
   { text: "", options: { fontSize: 10, breakLine: true } },
   { text: "ledger（公開）= ハッシュのみ", options: { fontSize: 14, color: GRAY, breakLine: true } },
-  { text: "witness（非公開）= 金額・送金先", options: { fontSize: 14, color: GRAY, breakLine: true } },
+  { text: "witness入力 = 金額・受取人公開鍵（回路内で公開）", options: { fontSize: 14, color: GRAY, breakLine: true } },
   { text: "circuit = ZKPで正当性を証明", options: { fontSize: 14, color: GRAY } }
 ], { x: 0.6, y: 2.0, w: 8.8, h: 3.0, margin: 0 });
 
@@ -207,7 +207,7 @@ s13.background = { color: BLACK };
 addTitle(s13, "活用イメージ");
 
 const useCases = [
-  { title: "プライベート決済", desc: "送金額・送金先を非公開に" },
+  { title: "秘匿残高更新PoC", desc: "金額は秘匿・相手公開鍵は公開" },
   { title: "AI学習データ流通", desc: "データを手放さず品質を証明" },
   { title: "医療データ", desc: "受診資格を記録なしで証明" },
   { title: "デジタル本人確認", desc: "属性だけを証明" },
@@ -271,7 +271,7 @@ s15.addText("ご質問・ご相談はお気軽にどうぞ", {
 });
 
 // Save
-const outputPath = "/Users/sition/Documents/SITION/DEV/midnight-mcp-demo/docs/midnight-mcp-demo.pptx";
+const outputPath = require("node:path").join(__dirname, "midnight-mcp-demo.pptx");
 pres.writeFile({ fileName: outputPath }).then(() => {
   console.log("Created: " + outputPath);
   console.log("Slides: " + pres.slides.length);

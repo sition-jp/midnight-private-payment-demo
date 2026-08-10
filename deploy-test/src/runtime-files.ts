@@ -22,6 +22,15 @@ export function loadDeployment(): DeploymentInfo {
   return { contractAddress: parsed.contractAddress, network: parsed.network };
 }
 
+export function saveDeployment(deployment: DeploymentInfo): void {
+  const file = resolveRuntimeFile('MIDNIGHT_DEPLOYMENT_FILE', 'deployment.json');
+  fs.writeFileSync(file, `${JSON.stringify(deployment, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  fs.chmodSync(file, 0o600);
+}
+
 export function loadWalletSeed(): string {
   const file = resolveRuntimeFile('MIDNIGHT_SEED_FILE', '.midnight-seed');
   if (!fs.existsSync(file)) {
