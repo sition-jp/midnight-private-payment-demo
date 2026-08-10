@@ -27,7 +27,7 @@ import { MIDNIGHT_CONFIG } from './config.js';
 import {
   attachTransferDisclosure,
   extractCircuitResult,
-  extractFinalizedTransactionMetadata,
+  makeTransactionResult as buildTransactionResult,
 } from './contract-result.js';
 import { buildTransferDisclosure } from './transfer-disclosure.js';
 import { inMemoryPrivateStateProvider } from '../providers/InMemoryPrivateStateProvider.js';
@@ -186,13 +186,7 @@ async function create1AMProviders(
 // ─── Transaction Helpers ─────────────────────────────────────────────────────
 
 function makeTransactionResult(result: unknown): TransactionResult {
-  const metadata = extractFinalizedTransactionMetadata(result);
-  return {
-    txHash: metadata.txHash,
-    status: 'confirmed',
-    blockHeight: metadata.blockHeight,
-    explorerUrl: `${MIDNIGHT_CONFIG.explorerUrl}/tx/0x${metadata.txHash}`,
-  };
+  return buildTransactionResult(result, MIDNIGHT_CONFIG.explorerUrl);
 }
 
 function requireRecord(value: unknown, message: string): Record<string, unknown> {
