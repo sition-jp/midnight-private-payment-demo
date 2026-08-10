@@ -6,7 +6,14 @@
  *
  * Implements the PrivateStateProvider interface from @midnight-ntwrk/midnight-js-types.
  */
-import type { PrivateStateProvider, PrivateStateId } from '@midnight-ntwrk/midnight-js-types';
+import type {
+  ImportPrivateStatesResult,
+  ImportSigningKeysResult,
+  PrivateStateExport,
+  PrivateStateId,
+  PrivateStateProvider,
+  SigningKeyExport,
+} from '@midnight-ntwrk/midnight-js-types';
 import type { ContractAddress, SigningKey } from '@midnight-ntwrk/compact-runtime';
 
 /**
@@ -18,20 +25,36 @@ export function inMemoryPrivateStateProvider<
   PSI extends PrivateStateId = PrivateStateId,
   PS = unknown,
 >(): PrivateStateProvider<PSI, PS> {
-  const stateStore = new Map<PSI, PS>();
+  const stateStore = new Map<string, PS>();
   const signingKeyStore = new Map<string, SigningKey>();
+  let activeContractAddress: string | undefined;
+
+  const scopedKey = (privateStateId: PSI): string => {
+    if (!activeContractAddress) {
+      throw new Error('Contract address must be set before private state access');
+    }
+    return `${activeContractAddress}:${privateStateId}`;
+  };
+
+  const unsupported = (): never => {
+    throw new Error('Export/import is unavailable for the in-memory workshop provider');
+  };
 
   return {
+    setContractAddress(address: ContractAddress): void {
+      activeContractAddress = String(address);
+    },
+
     async set(privateStateId: PSI, state: PS): Promise<void> {
-      stateStore.set(privateStateId, state);
+      stateStore.set(scopedKey(privateStateId), state);
     },
 
     async get(privateStateId: PSI): Promise<PS | null> {
-      return stateStore.get(privateStateId) ?? null;
+      return stateStore.get(scopedKey(privateStateId)) ?? null;
     },
 
     async remove(privateStateId: PSI): Promise<void> {
-      stateStore.delete(privateStateId);
+      stateStore.delete(scopedKey(privateStateId));
     },
 
     async clear(): Promise<void> {
@@ -52,6 +75,22 @@ export function inMemoryPrivateStateProvider<
 
     async clearSigningKeys(): Promise<void> {
       signingKeyStore.clear();
+    },
+
+    async exportPrivateStates(): Promise<PrivateStateExport> {
+      return unsupported();
+    },
+
+    async importPrivateStates(): Promise<ImportPrivateStatesResult> {
+      return unsupported();
+    },
+
+    async exportSigningKeys(): Promise<SigningKeyExport> {
+      return unsupported();
+    },
+
+    async importSigningKeys(): Promise<ImportSigningKeysResult> {
+      return unsupported();
     },
   };
 }

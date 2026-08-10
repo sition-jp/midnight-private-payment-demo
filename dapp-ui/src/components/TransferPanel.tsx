@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import type { CurrentTx } from '../hooks/useTransaction.js';
+import {
+  generateRandomRecipientHex,
+  isRecipientPublicKeyHex,
+} from '../midnight/recipient.js';
 import { TxResult } from './TxResult.js';
 
 interface TransferPanelProps {
@@ -9,13 +13,6 @@ interface TransferPanelProps {
   currentTx: CurrentTx | null;
   lastResult: TransactionResult | null;
   hasDeposited: boolean;
-}
-
-function generateRandomRecipient(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
 
 export function TransferPanel({
@@ -28,16 +25,17 @@ export function TransferPanel({
   const [amount, setAmount] = useState('100');
   const [recipient, setRecipient] = useState('');
   const [result, setResult] = useState<TransactionResult | null>(lastResult);
+  const isRecipientValid = isRecipientPublicKeyHex(recipient);
 
   const isDisabled =
     !contract ||
     !hasDeposited ||
     (currentTx !== null && currentTx.status === 'pending') ||
-    recipient.length !== 64;
+    !isRecipientValid;
 
   const handleTransfer = async () => {
     const amountBigint = BigInt(amount || '0');
-    if (amountBigint <= 0n || recipient.length !== 64) return;
+    if (amountBigint <= 0n || !isRecipientValid) return;
     const txResult = await onTransfer(amountBigint, recipient);
     if (txResult) {
       setResult(txResult);
@@ -51,8 +49,12 @@ export function TransferPanel({
       <div className="bg-[#16213e] rounded-lg p-6">
         <h2 className="text-xl font-bold text-white mb-2">Private Transfer</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          Send tokens privately using Zero-Knowledge Proofs. The amount and recipient are hidden
-          on-chain.
+          Update committed balances with a Zero-Knowledge Proof. The amount is hidden; sender and
+          recipient public keys remain visible on-chain.
+        </p>
+        <p className="text-xs text-yellow-400 mb-4">
+          Proof of concept: recipient private state is not delivered, so this is not a complete
+          two-party payment.
         </p>
 
         {/* ZKP Badge */}
@@ -78,22 +80,28 @@ export function TransferPanel({
               Recipient (64-char hex public key)
             </label>
             <input
-              type="text"
+              type="password"
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
               placeholder="Enter 64-character hex recipient..."
+              autoComplete="off"
               className="w-full bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
               maxLength={64}
             />
             <div className="flex items-center justify-between mt-1">
               <p className="text-xs text-[#666]">{recipient.length}/64 characters</p>
               <button
-                onClick={() => setRecipient(generateRandomRecipient())}
+                onClick={() => setRecipient(generateRandomRecipientHex())}
                 className="text-xs text-[#0066ff] hover:text-[#0052cc]"
               >
                 Generate Random
               </button>
             </div>
+            {recipient.length > 0 && !isRecipientValid && (
+              <p className="mt-1 text-xs text-red-400">
+                Recipient must be exactly 64 hexadecimal characters.
+              </p>
+            )}
           </div>
 
           <button
@@ -104,8 +112,8 @@ export function TransferPanel({
             {!contract
               ? 'Connect wallet & contract first'
               : !hasDeposited
-                ? 'Make a deposit first'
-                : 'Send Private'}
+                ? 'Initialize demo balance first'
+                : 'Submit Hidden-Amount Transfer'}
           </button>
 
           {transferTx?.status === 'pending' && (
@@ -129,7 +137,7 @@ export function TransferPanel({
                 Amount: PRIVATE
               </span>
               <span className="bg-[#0066ff]/20 text-[#0066ff] px-3 py-1 rounded-full text-xs">
-                Recipient: PRIVATE
+                Recipient: PUBLIC
               </span>
             </div>
           )}

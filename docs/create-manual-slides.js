@@ -113,7 +113,7 @@ s5.addText([
 ], { x: 0.6, y: 1.5, w: 8.8, h: 1.6, margin: 0 });
 
 s5.addText(".mcp.json をプロジェクトルートに作成", { x: 0.6, y: 3.3, w: 8.8, h: 0.3, fontSize: 14, color: WHITE, bold: true, margin: 0 });
-addCodeBlock(s5, '{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@latest"]\n    }\n  }\n}', 0.6, 3.7, 5.0, 1.6);
+addCodeBlock(s5, '{\n  "mcpServers": {\n    "midnight": {\n      "command": "npx",\n      "args": ["-y", "midnight-mcp@0.3.0"]\n    }\n  }\n}', 0.6, 3.7, 5.0, 1.6);
 
 s5.addText("たった3行の設定で\n60秒セットアップ完了", { x: 6.0, y: 3.7, w: 3.4, h: 1.0, fontSize: 18, color: BLUE, bold: true, margin: 0 });
 
@@ -152,11 +152,11 @@ s7.addShape(pres.shapes.RECTANGLE, { x: 5.2, y: 1.5, w: 4.2, h: 1.5, fill: { col
 s7.addText([
   { text: "Midnightコントラクト", options: { fontSize: 14, bold: true, color: WHITE, breakLine: true } },
   { text: "", options: { fontSize: 6, breakLine: true } },
-  { text: "ZKPで「送金が正当」という\n事実だけを記録\n金額・相手先は非公開", options: { fontSize: 13, color: WHITE } }
+  { text: "金額・残高実値・saltを秘匿\n送信者・受取人の公開鍵は公開", options: { fontSize: 13, color: WHITE } }
 ], { x: 5.5, y: 1.6, w: 3.6, h: 1.3, margin: 0 });
 
 s7.addText("生成プロンプト:", { x: 0.6, y: 3.3, w: 8.8, h: 0.3, fontSize: 14, color: WHITE, bold: true, margin: 0 });
-addCodeBlock(s7, "Compact言語で、送金額と送金先を非公開にした\nプライベート決済コントラクトを作成してください", 0.6, 3.7, 8.8, 0.7);
+addCodeBlock(s7, "金額と残高実値を非公開にし、両者の公開鍵を公開する\n残高更新コントラクトを作成してください", 0.6, 3.7, 8.8, 0.7);
 
 s7.addText("→ MCPが自動で構文取得 → サンプル参照 → コード生成", { x: 0.6, y: 4.6, w: 8.8, h: 0.3, fontSize: 14, color: BLUE, margin: 0 });
 
@@ -179,14 +179,14 @@ s8.addShape(pres.shapes.RECTANGLE, { x: 3.6, y: 1.3, w: 2.8, h: 0.05, fill: { co
 s8.addText("witness", { x: 3.8, y: 1.4, w: 2.4, h: 0.3, fontSize: 16, color: "ff4444", bold: true, margin: 0 });
 s8.addText("ローカルのみ・非公開", { x: 3.8, y: 1.7, w: 2.4, h: 0.3, fontSize: 12, color: GRAY, margin: 0 });
 s8.addText("local_secret_key\nprivate_amount\nprivate_recipient", { x: 3.8, y: 2.2, w: 2.4, h: 0.8, fontSize: 11, fontFace: "Consolas", color: WHITE, margin: 0 });
-s8.addText("秘密鍵・送金額・\n送金先はチェーンに\n絶対に乗らない", { x: 3.8, y: 3.2, w: 2.4, h: 0.6, fontSize: 12, color: GRAY, margin: 0 });
+s8.addText("秘密鍵・送金額・saltは秘匿\n受取人公開鍵は\ndisclose()で公開", { x: 3.8, y: 3.2, w: 2.4, h: 0.6, fontSize: 12, color: GRAY, margin: 0 });
 
 // circuit
 s8.addShape(pres.shapes.RECTANGLE, { x: 6.6, y: 1.3, w: 2.8, h: 3.5, fill: { color: DARK_BLUE } });
 s8.addShape(pres.shapes.RECTANGLE, { x: 6.6, y: 1.3, w: 2.8, h: 0.05, fill: { color: "44ff44" } });
 s8.addText("circuit", { x: 6.8, y: 1.4, w: 2.4, h: 0.3, fontSize: 16, color: "44ff44", bold: true, margin: 0 });
 s8.addText("処理ロジック", { x: 6.8, y: 1.7, w: 2.4, h: 0.3, fontSize: 12, color: GRAY, margin: 0 });
-s8.addText("deposit\n → 残高登録（公開）\n\nprivate_transfer\n → ZKP送金（非公開）\n\ncheck_balance\n → 残高確認（非公開）", { x: 6.8, y: 2.1, w: 2.4, h: 1.8, fontSize: 11, color: WHITE, margin: 0 });
+s8.addText("deposit\n → 公開額で残高更新\n\nprivate_transfer\n → 金額秘匿・公開鍵公開\n\ncheck_balance\n → 残高を公開", { x: 6.8, y: 2.1, w: 2.4, h: 1.8, fontSize: 11, color: WHITE, margin: 0 });
 
 // ── Slide 9: Part 4 コンパイル ──
 let s9 = pres.addSlide();
@@ -310,7 +310,7 @@ s14.addText([
 s14.addText("ご質問はお気軽にどうぞ", { x: 0.6, y: 4.6, w: 8.8, h: 0.4, fontSize: 16, color: GRAY, margin: 0 });
 
 // Save
-const outputPath = "/Users/sition/Documents/SITION/DEV/midnight-mcp-demo/docs/midnight-mcp-manual.pptx";
+const outputPath = require("node:path").join(__dirname, "midnight-mcp-manual.pptx");
 pres.writeFile({ fileName: outputPath }).then(() => {
   console.log("Created: " + outputPath);
   console.log("Slides: " + pres.slides.length);

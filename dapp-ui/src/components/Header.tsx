@@ -52,7 +52,7 @@ export function Header({ mode, onModeChange, walletContext }: HeaderProps) {
             <div className="flex items-center gap-2 bg-[#16213e] px-3 py-1.5 rounded text-xs">
               <span className="w-2 h-2 rounded-full bg-green-400" />
               <span className="text-[#cccccc] font-mono">
-                {truncateAddress(walletContext.address)}
+                {walletContext.mode === 'demo' ? 'Demo connected' : truncateAddress(walletContext.address)}
               </span>
             </div>
           )}

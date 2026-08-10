@@ -1,12 +1,15 @@
-pragma language_version >= 0.16 && <= 0.21;
+pragma language_version >= 0.23 && <= 0.23;
 
 import CompactStandardLibrary;
 
 // =============================================================================
 // Private Payment Contract
 // =============================================================================
-// Amount and recipient are private (witness). On-chain, only balance
-// commitments (hashes) are stored — actual values are never disclosed.
+// Private transfers keep amount, balance values, and salts private. Sender and
+// recipient public keys are disclosed as keys in the public commitment map.
+// check_balance explicitly discloses its returned balance. This contract does
+// not deliver private state to a recipient, so it is a private-balance-update
+// proof of concept rather than a complete two-party payment system.
 // ZKP proves: (1) sender knows their balance, (2) balance >= amount,
 // (3) new commitments are correctly derived.
 // =============================================================================
@@ -85,7 +88,8 @@ export circuit deposit(amount: Uint<64>): [] {
 }
 
 // === Circuit: Private Transfer ===
-// Both amount and recipient are witnesses — never disclosed on-chain.
+// The amount remains private. Sender and recipient public keys are disclosed
+// below as keys in the public commitment map.
 // The ZKP proves:
 //   1. Sender knows their current balance (matches on-chain commitment)
 //   2. Sender has sufficient balance (balance >= amount)
@@ -137,7 +141,8 @@ export circuit private_transfer(): [] {
     recipient_pk, new_recipient_balance, recipient_new_salt
   );
 
-  // Update on-chain commitments (only hashes — no amounts or identities revealed)
+  // Publish both account public keys and their new commitment hashes.
+  // Amount, balance values, and salts remain private.
   balance_commitments.insert(disclose(sender_pk), disclose(new_sender_commit));
   balance_commitments.insert(disclose(recipient_pk), disclose(new_recipient_commit));
 
@@ -147,8 +152,8 @@ export circuit private_transfer(): [] {
 }
 
 // === Circuit: Check Own Balance ===
-// Returns the caller's balance. Only the caller can read their own balance
-// (proven by knowledge of their secret key).
+// Verifies the balance using knowledge of the caller's secret key, then
+// explicitly discloses the balance as the circuit return value.
 export circuit check_balance(): Uint<64> {
   const sk = local_secret_key();
   const pk = derive_pk(sk);

@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import type { WalletMode, WalletContext } from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
+import { getSecretInputAttributes } from '../midnight/secret-input.js';
 import type { ContractContext } from '../types/index.js';
-import { MIDNIGHT_CONFIG } from '../midnight/config.js';
+import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
 
 interface WalletPanelProps {
   mode: WalletMode;
@@ -14,6 +16,8 @@ interface WalletPanelProps {
   walletContext: WalletContext | null;
   contract: ContractContext | null;
   isConnectingWallet: boolean;
+  syncProgress: WalletSyncProgressSnapshot | null;
+  syncElapsedMs: number;
   isConnectingContract: boolean;
   walletBalance: bigint | null;
   walletError: string | null;
@@ -42,6 +46,13 @@ function formatBalance(bal: bigint): string {
   return `${whole.toLocaleString()}.${fracStr}`;
 }
 
+function formatElapsed(elapsedMs: number): string {
+  const totalSeconds = Math.floor(elapsedMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function WalletPanel({
   mode,
   seed,
@@ -53,12 +64,17 @@ export function WalletPanel({
   walletContext,
   contract,
   isConnectingWallet,
+  syncProgress,
+  syncElapsedMs,
   isConnectingContract,
   walletBalance,
   walletError,
   contractError,
   laceAvailable,
 }: WalletPanelProps) {
+  const [isSeedRevealed, setIsSeedRevealed] = useState(false);
+  const seedInputAttributes = getSecretInputAttributes(isSeedRevealed);
+
   // Connected state
   if (walletContext) {
     return (
@@ -102,18 +118,8 @@ export function WalletPanel({
               </div>
             </div>
             <div>
-              <label className="text-sm text-[#cccccc]">Contract Address</label>
-              <div className="flex items-center gap-2 mt-1">
-                <code className="text-white font-mono text-xs bg-[#1a1a2e] px-3 py-1.5 rounded flex-1 truncate">
-                  {truncateAddress(MIDNIGHT_CONFIG.contractAddress)}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(MIDNIGHT_CONFIG.contractAddress)}
-                  className="text-[#0066ff] hover:text-[#0052cc] text-sm px-2 py-1.5 bg-[#1a1a2e] rounded"
-                >
-                  Copy
-                </button>
-              </div>
+              <label className="text-sm text-[#cccccc]">Contract</label>
+              <p className="text-white mt-1">Configured at runtime</p>
             </div>
           </div>
         </div>
@@ -160,34 +166,95 @@ export function WalletPanel({
       {mode === 'demo' ? (
         <div className="space-y-4">
           <div>
+            <div className="mb-3 rounded border border-yellow-900/50 bg-yellow-900/20 p-3">
+              <p className="text-xs text-yellow-300">
+                Use a disposable Preprod demo seed only. Never use a real wallet seed.
+              </p>
+            </div>
             <label className="text-sm text-[#cccccc] block mb-1">
               Seed (64-character hex)
             </label>
-            <input
-              type="text"
-              value={seed}
-              onChange={(e) => onSeedChange(e.target.value)}
-              placeholder="Enter 64-character hex seed..."
-              className="w-full bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
-              maxLength={64}
-            />
+            <div className="flex gap-2">
+              <input
+                {...seedInputAttributes}
+                value={seed}
+                onChange={(e) => {
+                  if (seed.length === 0) setIsSeedRevealed(false);
+                  onSeedChange(e.target.value);
+                }}
+                placeholder="Enter 64-character hex seed..."
+                aria-label="Disposable demo seed"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
+                maxLength={64}
+              />
+              <button
+                type="button"
+                onClick={() => setIsSeedRevealed((current) => !current)}
+                aria-pressed={isSeedRevealed}
+                className="bg-[#1a1a2e] border border-[#333] hover:border-[#0066ff] text-[#cccccc] rounded px-3 py-2 text-xs"
+              >
+                {isSeedRevealed ? 'Hide seed' : 'Show seed'}
+              </button>
+            </div>
             <p className="text-xs text-[#666] mt-1">{seed.length}/64 characters</p>
           </div>
           <div className="flex gap-3">
             <button
-              onClick={onGenerateSeed}
+              onClick={() => {
+                setIsSeedRevealed(false);
+                onGenerateSeed();
+              }}
               className="bg-[#1a1a2e] border border-[#333] hover:border-[#0066ff] text-[#cccccc] hover:text-white rounded px-4 py-2 text-sm"
             >
               Generate Random Seed
             </button>
             <button
-              onClick={onConnect}
+              onClick={() => {
+                setIsSeedRevealed(false);
+                onConnect();
+              }}
               disabled={isConnectingWallet || seed.length !== 64}
               className="bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex-1"
             >
               {isConnectingWallet ? 'Connecting & Syncing...' : 'Connect'}
             </button>
           </div>
+          {isConnectingWallet && (
+            <div
+              className="bg-[#1a1a2e] border border-[#333] rounded p-4 space-y-2"
+              aria-live="polite"
+            >
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium text-white">Synchronizing Preprod wallet</p>
+                <span className="text-xs font-mono text-[#cccccc]">
+                  {formatElapsed(syncElapsedMs)}
+                </span>
+              </div>
+              <p className="text-xs text-[#888]">
+                Shielded sync scans chain events to discover private state. Applied progress must reach the exact tip.
+              </p>
+              {syncProgress ? (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs font-mono">
+                  <dt className="text-[#888]">Shielded</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.shielded.current.toString()} / {syncProgress.shielded.total.toString()}
+                  </dd>
+                  <dt className="text-[#888]">Unshielded</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.unshielded.current.toString()} / {syncProgress.unshielded.total.toString()}
+                  </dd>
+                  <dt className="text-[#888]">DUST</dt>
+                  <dd className="text-[#cccccc]">
+                    {syncProgress.dust.current.toString()} / {syncProgress.dust.total.toString()}
+                  </dd>
+                </dl>
+              ) : (
+                <p className="text-xs font-mono text-[#888]">Starting wallet services...</p>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">

@@ -10,13 +10,6 @@ interface BalancePanelProps {
   transactions: TransactionResult[];
 }
 
-function txTypeLabel(tx: TransactionResult): string {
-  const hash = tx.txHash;
-  // Simple heuristic: we can't reliably determine type from the result alone,
-  // so we show the hash and status
-  return hash === 'unknown' ? 'Operation' : `Tx ${hash.slice(0, 8)}...`;
-}
-
 export function BalancePanel({
   contract,
   onCheckBalance,
@@ -33,7 +26,8 @@ export function BalancePanel({
       <div className="bg-[#16213e] rounded-lg p-6">
         <h2 className="text-xl font-bold text-white mb-2">Contract Balance</h2>
         <p className="text-sm text-[#cccccc] mb-4">
-          Query your private balance from the contract using a ZKP circuit.
+          The circuit verifies the committed value, but check_balance publicly discloses the
+          returned balance.
         </p>
 
         <div className="bg-[#1a1a2e] rounded-lg p-4 mb-4">
@@ -67,7 +61,7 @@ export function BalancePanel({
               >
                 <div className="flex items-center gap-2">
                   <span>{tx.status === 'confirmed' ? '✅' : '❌'}</span>
-                  <span className="text-white font-mono">{txTypeLabel(tx)}</span>
+                  <span className="text-white">Confirmed operation</span>
                 </div>
                 <a
                   href={tx.explorerUrl}

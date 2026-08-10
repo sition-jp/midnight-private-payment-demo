@@ -5,7 +5,12 @@
  * Uses crypto.getRandomValues() instead of Node.js crypto module.
  */
 import { Buffer } from 'buffer';
-import type { WitnessContext } from '@midnight-ntwrk/compact-runtime';
+import {
+  CompactTypeBytes,
+  CompactTypeVector,
+  persistentHash,
+  type WitnessContext,
+} from '@midnight-ntwrk/compact-runtime';
 import type { Witnesses, Ledger } from '../../public/contracts/private-payment/contract/index.js';
 import type { TransferContext } from '../types/index.js';
 
@@ -16,11 +21,6 @@ export interface PrivatePaymentState {
   readonly secretKey: Uint8Array;
   readonly balances: Map<string, bigint>;
   readonly salts: Map<string, Uint8Array>;
-  /** Per-transaction transfer context (set before calling private_transfer) */
-  readonly pendingAmount: bigint;
-  readonly pendingRecipient: Uint8Array;
-  readonly recipientBalance: bigint;
-  readonly recipientSalt: Uint8Array;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -33,40 +33,63 @@ function randomBytes32(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
 }
 
+const bytes32 = new CompactTypeBytes(32);
+const derivePublicKeyInput = new CompactTypeVector(2, bytes32);
+const publicKeyDomain = new Uint8Array(32);
+publicKeyDomain.set(new TextEncoder().encode('midnight:pk:'));
+
+/** Mirrors the contract's private derive_pk circuit exactly. */
+export function deriveContractPublicKey(secretKey: Uint8Array): Uint8Array {
+  if (secretKey.length !== 32) {
+    throw new Error('Contract secret key must be 32 bytes');
+  }
+  return persistentHash(derivePublicKeyInput, [publicKeyDomain, secretKey]);
+}
+
 // ─── Initial State ───────────────────────────────────────────────────────────
 
 export function createInitialPrivateState(secretKey: Uint8Array): PrivatePaymentState {
+  if (secretKey.length !== 32) {
+    throw new Error('Contract secret key must be 32 bytes');
+  }
   return {
     secretKey,
     balances: new Map(),
     salts: new Map(),
-    pendingAmount: 0n,
-    pendingRecipient: new Uint8Array(32),
-    recipientBalance: 0n,
-    recipientSalt: new Uint8Array(32),
   };
 }
 
-// ─── Mutable Transfer Context ────────────────────────────────────────────────
+// ─── Contract-Scoped Transfer Context ───────────────────────────────────────
 
 /**
- * Module-level mutable transfer context.
- * Set these values before calling private_transfer().
- * The witnesses close over this object and read from it at circuit execution time.
+ * Create one mutable context per connected contract. The witness provider closes
+ * over this object, so unrelated contracts cannot replace each other's inputs.
  */
-export const transferContext: TransferContext = {
-  amount: 0n,
-  recipient: new Uint8Array(32),
-  recipientBalance: 0n,
-  recipientSalt: new Uint8Array(32),
-};
+export function createTransferContext(): TransferContext {
+  return {
+    amount: 0n,
+    recipient: new Uint8Array(32),
+  };
+}
 
 /** Update the transfer context before executing private_transfer */
-export function setTransferContext(ctx: TransferContext): void {
-  transferContext.amount = ctx.amount;
-  transferContext.recipient = ctx.recipient;
-  transferContext.recipientBalance = ctx.recipientBalance;
-  transferContext.recipientSalt = ctx.recipientSalt;
+export function setTransferContext(
+  target: TransferContext,
+  input: Readonly<TransferContext>,
+): void {
+  if (input.recipient.length !== 32) {
+    throw new Error('Recipient public key must be exactly 32 bytes');
+  }
+  target.amount = input.amount;
+  target.recipient.fill(0);
+  target.recipient = new Uint8Array(input.recipient);
+}
+
+/** Remove ephemeral transfer inputs after the queued call settles. */
+export function clearTransferContext(target: TransferContext): void {
+  target.amount = 0n;
+  target.recipient.fill(0);
+  target.recipient = new Uint8Array(32);
 }
 
 // ─── Witness Provider ────────────────────────────────────────────────────────
@@ -76,7 +99,9 @@ export function setTransferContext(ctx: TransferContext): void {
  * Transfer-related witnesses read from the mutable transferContext, allowing
  * deposit and private_transfer to share the same compiled contract and private state.
  */
-export function createWitnesses(): Witnesses<PrivatePaymentState> {
+export function createWitnesses(
+  transferContext: TransferContext,
+): Witnesses<PrivatePaymentState> {
   return {
     local_secret_key(
       context: WitnessContext<Ledger, PrivatePaymentState>,
@@ -134,13 +159,15 @@ export function createWitnesses(): Witnesses<PrivatePaymentState> {
     get_recipient_balance(
       context: WitnessContext<Ledger, PrivatePaymentState>,
     ): [PrivatePaymentState, bigint] {
-      return [context.privateState, transferContext.recipientBalance];
+      const key = toHexKey(transferContext.recipient);
+      return [context.privateState, context.privateState.balances.get(key) ?? 0n];
     },
 
     get_recipient_salt(
       context: WitnessContext<Ledger, PrivatePaymentState>,
     ): [PrivatePaymentState, Uint8Array] {
-      return [context.privateState, transferContext.recipientSalt];
+      const key = toHexKey(transferContext.recipient);
+      return [context.privateState, context.privateState.salts.get(key) ?? new Uint8Array(32)];
     },
 
     new_recipient_salt(

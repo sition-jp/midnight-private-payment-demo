@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import { executePrivateTransfer } from '../midnight/contract.js';
+import { parseRecipientPublicKeyHex } from '../midnight/recipient.js';
 
 export interface CurrentTx {
   type: 'deposit' | 'transfer' | 'balance';
@@ -74,9 +75,7 @@ export function useTransaction(): UseTransactionReturn {
     ): Promise<TransactionResult | null> => {
       startTimer('transfer');
       try {
-        const recipientBytes = new Uint8Array(
-          recipientHex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16)),
-        );
+        const recipientBytes = parseRecipientPublicKeyHex(recipientHex);
         const result = await executePrivateTransfer(contract, amount, recipientBytes);
         stopTimer();
         setCurrentTx((prev) => (prev ? { ...prev, status: 'confirmed' } : null));
@@ -103,7 +102,7 @@ export function useTransaction(): UseTransactionReturn {
         setCurrentTx((prev) => (prev ? { ...prev, status: 'confirmed' } : null));
         setTransactions((prev) => [result, ...prev]);
         if (result.result != null) {
-          setBalance(BigInt(result.result as string | number | bigint));
+          setBalance(result.result);
         }
         return result;
       } catch (err) {
