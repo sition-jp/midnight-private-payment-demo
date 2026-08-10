@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import type { WalletMode, WalletContext } from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
+import { getSecretInputAttributes } from '../midnight/secret-input.js';
 import type { ContractContext } from '../types/index.js';
 import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
 
@@ -70,6 +72,13 @@ export function WalletPanel({
   contractError,
   laceAvailable,
 }: WalletPanelProps) {
+  const [isSeedRevealed, setIsSeedRevealed] = useState(false);
+  const seedInputAttributes = getSecretInputAttributes(isSeedRevealed);
+
+  useEffect(() => {
+    if (seed.length === 0) setIsSeedRevealed(false);
+  }, [seed]);
+
   // Connected state
   if (walletContext) {
     return (
@@ -161,22 +170,43 @@ export function WalletPanel({
       {mode === 'demo' ? (
         <div className="space-y-4">
           <div>
+            <div className="mb-3 rounded border border-yellow-900/50 bg-yellow-900/20 p-3">
+              <p className="text-xs text-yellow-300">
+                Use a disposable Preprod demo seed only. Never use a real wallet seed.
+              </p>
+            </div>
             <label className="text-sm text-[#cccccc] block mb-1">
               Seed (64-character hex)
             </label>
-            <input
-              type="text"
-              value={seed}
-              onChange={(e) => onSeedChange(e.target.value)}
-              placeholder="Enter 64-character hex seed..."
-              className="w-full bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
-              maxLength={64}
-            />
+            <div className="flex gap-2">
+              <input
+                {...seedInputAttributes}
+                value={seed}
+                onChange={(e) => onSeedChange(e.target.value)}
+                placeholder="Enter 64-character hex seed..."
+                aria-label="Disposable demo seed"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-[#1a1a2e] border border-[#333] rounded px-3 py-2 text-white font-mono text-sm placeholder-[#666] focus:border-[#0066ff] focus:outline-none"
+                maxLength={64}
+              />
+              <button
+                type="button"
+                onClick={() => setIsSeedRevealed((current) => !current)}
+                aria-pressed={isSeedRevealed}
+                className="bg-[#1a1a2e] border border-[#333] hover:border-[#0066ff] text-[#cccccc] rounded px-3 py-2 text-xs"
+              >
+                {isSeedRevealed ? 'Hide seed' : 'Show seed'}
+              </button>
+            </div>
             <p className="text-xs text-[#666] mt-1">{seed.length}/64 characters</p>
           </div>
           <div className="flex gap-3">
             <button
-              onClick={onGenerateSeed}
+              onClick={() => {
+                setIsSeedRevealed(false);
+                onGenerateSeed();
+              }}
               className="bg-[#1a1a2e] border border-[#333] hover:border-[#0066ff] text-[#cccccc] hover:text-white rounded px-4 py-2 text-sm"
             >
               Generate Random Seed

@@ -12,6 +12,7 @@ test('workshop UI states the exact disclosure boundary', () => {
   const balancePanel = read('../components/BalancePanel.tsx');
   const header = read('../components/Header.tsx');
   const txResult = read('../components/TxResult.tsx');
+  const walletPanel = read('../components/WalletPanel.tsx');
 
   assert.match(depositPanel, /deposit amount is public/i);
   assert.match(depositPanel, /balance value remains hidden/i);
@@ -23,6 +24,9 @@ test('workshop UI states the exact disclosure boundary', () => {
   assert.doesNotMatch(balancePanel, /hash\.slice/);
   assert.match(header, /walletContext\.mode === 'demo'\s*\? 'Demo connected'/);
   assert.doesNotMatch(txResult, /Tx Hash:/);
+  assert.match(walletPanel, /disposable Preprod demo seed/i);
+  assert.match(walletPanel, /never use a real wallet seed/i);
+  assert.match(walletPanel, /getSecretInputAttributes/);
 });
 
 test('visibility panel binds the tested comparison caption and disclosure copy', () => {

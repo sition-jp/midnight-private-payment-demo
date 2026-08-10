@@ -102,6 +102,7 @@ export function useWallet(): UseWalletReturn {
       }, (resource) => {
         setWalletContext(resource.context);
         setBalance(resource.balance);
+        setSeed('');
       });
     } catch (err) {
       if (attempt === attemptRef.current) {
@@ -124,6 +125,7 @@ export function useWallet(): UseWalletReturn {
     setError(null);
     setSyncProgress(null);
     setSyncElapsedMs(0);
+    setSeed('');
     try {
       await lifecycleRef.current?.disconnect();
     } catch (disconnectError) {
@@ -143,6 +145,7 @@ export function useWallet(): UseWalletReturn {
     setError(null);
     setSyncProgress(null);
     setSyncElapsedMs(0);
+    setSeed('');
     try {
       await lifecycleRef.current?.disconnect();
     } catch (disconnectError) {

@@ -31,10 +31,6 @@ export interface WalletContext {
   /** Get current tNight balance (unshielded) */
   readonly getBalance: () => Promise<bigint>;
 
-  // Demo-mode specific fields (undefined for Lace mode)
-  /** The seed used to create this wallet (demo mode only) */
-  readonly seed?: string;
-
   // Lace-mode specific fields (undefined for demo mode)
   /** The DApp connector API instance (Lace mode only) */
   readonly laceApi?: InitialAPI;
