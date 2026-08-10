@@ -65,6 +65,11 @@ export function TxResult({ tx, currentTx }: TxResultProps) {
           <p className="text-white font-medium flex-1">Transaction Confirmed</p>
         </div>
         <div className="space-y-2 text-sm">
+          {tx.postFinalizationIssue && (
+            <div className="rounded border border-yellow-900/50 bg-yellow-900/20 p-3">
+              <p className="text-yellow-300">{tx.postFinalizationIssue.message}</p>
+            </div>
+          )}
           <div>
             <a
               href={tx.explorerUrl}

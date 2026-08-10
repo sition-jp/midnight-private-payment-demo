@@ -25,6 +25,7 @@ import { fromHex, toHex } from '@midnight-ntwrk/midnight-js-utils';
 
 import { MIDNIGHT_CONFIG } from './config.js';
 import {
+  attachTransferDisclosure,
   extractCircuitResult,
   extractFinalizedTransactionMetadata,
 } from './contract-result.js';
@@ -282,23 +283,24 @@ export async function connectToContract(
         setTransferContext(transferContext, submitted);
         try {
           const result = await contract.callTx.private_transfer();
-          const metadata = extractFinalizedTransactionMetadata(result);
-          const publicState = getPublicNextContractState(result);
-          const privateState = getPrivateNextState(result);
-          const ledgerView = contractModule.ledger(
-            publicState as Parameters<typeof contractModule.ledger>[0],
-          );
-          const disclosure = buildTransferDisclosure({
-            senderPublicKey,
-            recipientPublicKey: submitted.recipient,
-            amount: submitted.amount,
-            txHash: metadata.txHash,
-            blockHeight: requireBlockHeight(metadata.blockHeight),
-            senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
-            recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
-            nextPrivateState: privateState,
+          const transaction = makeTransactionResult(result);
+          return attachTransferDisclosure(transaction, () => {
+            const publicState = getPublicNextContractState(result);
+            const privateState = getPrivateNextState(result);
+            const ledgerView = contractModule.ledger(
+              publicState as Parameters<typeof contractModule.ledger>[0],
+            );
+            return buildTransferDisclosure({
+              senderPublicKey,
+              recipientPublicKey: submitted.recipient,
+              amount: submitted.amount,
+              txHash: transaction.txHash,
+              blockHeight: requireBlockHeight(transaction.blockHeight),
+              senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
+              recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
+              nextPrivateState: privateState,
+            });
           });
-          return { ...makeTransactionResult(result), disclosure };
         } finally {
           submitted.recipient.fill(0);
           clearTransferContext(transferContext);

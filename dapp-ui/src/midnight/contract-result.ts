@@ -1,3 +1,5 @@
+import type { TransactionResult, TransferDisclosureSnapshot } from '../types/index.js';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -37,4 +39,25 @@ export function extractCircuitResult(result: unknown): unknown {
   }
 
   return result.private.result;
+}
+
+/**
+ * Add the workshop visibility snapshot without reclassifying an already
+ * finalized transaction if the optional enrichment cannot be constructed.
+ */
+export function attachTransferDisclosure(
+  transaction: TransactionResult,
+  buildDisclosure: () => TransferDisclosureSnapshot,
+): TransactionResult {
+  try {
+    return { ...transaction, disclosure: buildDisclosure() };
+  } catch {
+    return {
+      ...transaction,
+      postFinalizationIssue: {
+        kind: 'transfer-disclosure-unavailable',
+        message: 'Transaction confirmed, but visibility details are unavailable.',
+      },
+    };
+  }
 }

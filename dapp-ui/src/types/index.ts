@@ -69,6 +69,12 @@ export interface TransferDisclosureSnapshot {
   };
 }
 
+/** A non-transactional failure that occurs after the network confirmed a call. */
+export interface PostFinalizationIssue {
+  readonly kind: 'transfer-disclosure-unavailable';
+  readonly message: string;
+}
+
 /** Result of a contract transaction */
 export interface TransactionResult {
   /** Transaction hash */
@@ -81,6 +87,8 @@ export interface TransactionResult {
   readonly result?: bigint;
   /** Ephemeral values selected for the transfer-visibility lesson */
   readonly disclosure?: TransferDisclosureSnapshot;
+  /** Optional enrichment warning; this never changes a confirmed transaction to failed. */
+  readonly postFinalizationIssue?: PostFinalizationIssue;
   /** Explorer URL for this transaction */
   readonly explorerUrl: string;
 }
