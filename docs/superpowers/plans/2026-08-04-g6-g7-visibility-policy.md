@@ -50,7 +50,7 @@
 - `dapp-ui/src/components/TransferPanel.tsx` — use the shared recipient helper.
 - `dapp-ui/src/App.tsx` — add Visibility and Policy tabs, preserve policy logs, and route successful transfers.
 - `dapp-ui/src/midnight/privacy-copy.test.ts` — source-level workshop copy invariants.
-- `/Users/sition/Documents/SITION/WORKLOG.md` — private completion entry only; never include runtime identifiers.
+- Private WORKLOG outside this public repository — completion entry only; never include runtime identifiers.
 
 ---
 
@@ -817,7 +817,7 @@ Do not print, screenshot, record, or commit runtime identifiers or private value
 ### Task 5: Final regression, private worklog, and branch handoff
 
 **Files:**
-- Modify: `/Users/sition/Documents/SITION/WORKLOG.md`
+- Modify: the private WORKLOG outside this public repository
 
 **Interfaces:**
 - Consumes: completed G-6/G-7 code and browser evidence.
