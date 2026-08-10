@@ -59,22 +59,37 @@ export function createInitialPrivateState(secretKey: Uint8Array): PrivatePayment
   };
 }
 
-// ─── Mutable Transfer Context ────────────────────────────────────────────────
+// ─── Contract-Scoped Transfer Context ───────────────────────────────────────
 
 /**
- * Module-level mutable transfer context.
- * Set these values before calling private_transfer().
- * The witnesses close over this object and read from it at circuit execution time.
+ * Create one mutable context per connected contract. The witness provider closes
+ * over this object, so unrelated contracts cannot replace each other's inputs.
  */
-export const transferContext: TransferContext = {
-  amount: 0n,
-  recipient: new Uint8Array(32),
-};
+export function createTransferContext(): TransferContext {
+  return {
+    amount: 0n,
+    recipient: new Uint8Array(32),
+  };
+}
 
 /** Update the transfer context before executing private_transfer */
-export function setTransferContext(ctx: TransferContext): void {
-  transferContext.amount = ctx.amount;
-  transferContext.recipient = ctx.recipient;
+export function setTransferContext(
+  target: TransferContext,
+  input: Readonly<TransferContext>,
+): void {
+  if (input.recipient.length !== 32) {
+    throw new Error('Recipient public key must be exactly 32 bytes');
+  }
+  target.amount = input.amount;
+  target.recipient.fill(0);
+  target.recipient = new Uint8Array(input.recipient);
+}
+
+/** Remove ephemeral transfer inputs after the queued call settles. */
+export function clearTransferContext(target: TransferContext): void {
+  target.amount = 0n;
+  target.recipient.fill(0);
+  target.recipient = new Uint8Array(32);
 }
 
 // ─── Witness Provider ────────────────────────────────────────────────────────
@@ -84,7 +99,9 @@ export function setTransferContext(ctx: TransferContext): void {
  * Transfer-related witnesses read from the mutable transferContext, allowing
  * deposit and private_transfer to share the same compiled contract and private state.
  */
-export function createWitnesses(): Witnesses<PrivatePaymentState> {
+export function createWitnesses(
+  transferContext: TransferContext,
+): Witnesses<PrivatePaymentState> {
   return {
     local_secret_key(
       context: WitnessContext<Ledger, PrivatePaymentState>,

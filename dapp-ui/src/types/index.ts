@@ -93,8 +93,11 @@ export interface ContractContext {
   readonly contractAddress: string;
   /** Execute deposit(amount) */
   readonly deposit: (amount: bigint) => Promise<TransactionResult>;
-  /** Execute private_transfer() — set transfer context first */
-  readonly privateTransfer: () => Promise<TransactionResult>;
+  /** Execute private_transfer() with a contract-scoped witness input */
+  readonly privateTransfer: (
+    amount: bigint,
+    recipient: Uint8Array,
+  ) => Promise<TransactionResult>;
   /** Execute check_balance() */
   readonly checkBalance: () => Promise<TransactionResult>;
   /** Read the retained local private balance without disclosing it on-chain */
@@ -103,7 +106,7 @@ export interface ContractContext {
 
 // ─── Transfer Context ────────────────────────────────────────────────────────
 
-/** Mutable transfer context set before calling private_transfer */
+/** Mutable transfer context owned by one connected contract */
 export interface TransferContext {
   amount: bigint;
   recipient: Uint8Array;

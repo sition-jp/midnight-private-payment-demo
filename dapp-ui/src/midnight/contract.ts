@@ -31,13 +31,15 @@ import {
 import { buildTransferDisclosure } from './transfer-disclosure.js';
 import { inMemoryPrivateStateProvider } from '../providers/InMemoryPrivateStateProvider.js';
 import {
+  clearTransferContext,
   createWitnesses,
   createInitialPrivateState,
+  createTransferContext,
   deriveContractPublicKey,
   setTransferContext,
-  transferContext,
   type PrivatePaymentState,
 } from './witness.js';
+import { createContractCallQueue } from './contract-serialization.js';
 import { getDemoWalletProvider } from './wallet.js';
 import type {
   WalletContext,
@@ -63,11 +65,11 @@ async function loadContractModule() {
  * Build the compiled contract with witnesses.
  * Uses window.location.origin as the ZK config base path (same as bboard).
  */
-async function buildCompiledContract() {
+async function buildCompiledContract(transferContext: TransferContext) {
   const contractModule = await loadContractModule();
 
   const compiledContract = CompiledContract.make('private-payment', contractModule.Contract).pipe(
-    CompiledContract.withWitnesses(createWitnesses()),
+    CompiledContract.withWitnesses(createWitnesses(transferContext)),
     CompiledContract.withCompiledFileAssets(window.location.origin),
   );
 
@@ -233,7 +235,9 @@ export async function connectToContract(
 ): Promise<ContractContext> {
   const privateStateProvider = inMemoryPrivateStateProvider<string, PrivatePaymentState>();
   const senderPublicKey = deriveContractPublicKey(secretKey);
-  const { compiledContract, contractModule } = await buildCompiledContract();
+  const transferContext = createTransferContext();
+  const callQueue = createContractCallQueue();
+  const { compiledContract, contractModule } = await buildCompiledContract(transferContext);
   const providers = walletCtx.mode === 'lace' && walletCtx.rawWalletApi
     ? await create1AMProviders(walletCtx, privateStateProvider)
     : createBrowserProviders(walletCtx, privateStateProvider);
@@ -263,46 +267,58 @@ export async function connectToContract(
     contractAddress,
 
     async deposit(amount: bigint): Promise<TransactionResult> {
-      const result = await contract.callTx.deposit(amount);
-      return makeTransactionResult(result);
+      return callQueue.run(async () => {
+        const result = await contract.callTx.deposit(amount);
+        return makeTransactionResult(result);
+      });
     },
 
-    async privateTransfer(): Promise<TransactionResult> {
-      const submitted = {
-        amount: transferContext.amount,
-        recipient: new Uint8Array(transferContext.recipient),
-      };
-      const result = await contract.callTx.private_transfer();
-      const metadata = extractFinalizedTransactionMetadata(result);
-      const publicState = getPublicNextContractState(result);
-      const privateState = getPrivateNextState(result);
-      const ledgerView = contractModule.ledger(
-        publicState as Parameters<typeof contractModule.ledger>[0],
-      );
-      const disclosure = buildTransferDisclosure({
-        senderPublicKey,
-        recipientPublicKey: submitted.recipient,
-        amount: submitted.amount,
-        txHash: metadata.txHash,
-        blockHeight: requireBlockHeight(metadata.blockHeight),
-        senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
-        recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
-        nextPrivateState: privateState,
+    async privateTransfer(amount: bigint, recipient: Uint8Array): Promise<TransactionResult> {
+      return callQueue.run(async () => {
+        const submitted = {
+          amount,
+          recipient: new Uint8Array(recipient),
+        };
+        setTransferContext(transferContext, submitted);
+        try {
+          const result = await contract.callTx.private_transfer();
+          const metadata = extractFinalizedTransactionMetadata(result);
+          const publicState = getPublicNextContractState(result);
+          const privateState = getPrivateNextState(result);
+          const ledgerView = contractModule.ledger(
+            publicState as Parameters<typeof contractModule.ledger>[0],
+          );
+          const disclosure = buildTransferDisclosure({
+            senderPublicKey,
+            recipientPublicKey: submitted.recipient,
+            amount: submitted.amount,
+            txHash: metadata.txHash,
+            blockHeight: requireBlockHeight(metadata.blockHeight),
+            senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
+            recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
+            nextPrivateState: privateState,
+          });
+          return { ...makeTransactionResult(result), disclosure };
+        } finally {
+          submitted.recipient.fill(0);
+          clearTransferContext(transferContext);
+        }
       });
-      return { ...makeTransactionResult(result), disclosure };
     },
 
     async checkBalance(): Promise<TransactionResult> {
-      const result = await contract.callTx.check_balance();
-      // The contract discloses this value, but midnight-js wraps all JS circuit
-      // return values in the generic privacy-sensitive `private.result` envelope.
-      // Extract only the value; never log or persist the surrounding object.
-      const balance = extractCircuitResult(result);
-      if (typeof balance !== 'bigint') {
-        throw new Error('Disclosed contract balance is unavailable');
-      }
-      const txResult = makeTransactionResult(result);
-      return { ...txResult, result: balance };
+      return callQueue.run(async () => {
+        const result = await contract.callTx.check_balance();
+        // The contract discloses this value, but midnight-js wraps all JS circuit
+        // return values in the generic privacy-sensitive `private.result` envelope.
+        // Extract only the value; never log or persist the surrounding object.
+        const balance = extractCircuitResult(result);
+        if (typeof balance !== 'bigint') {
+          throw new Error('Disclosed contract balance is unavailable');
+        }
+        const txResult = makeTransactionResult(result);
+        return { ...txResult, result: balance };
+      });
     },
 
     async readPrivateBalance(): Promise<bigint> {
@@ -324,11 +340,5 @@ export async function executePrivateTransfer(
   amount: bigint,
   recipient: Uint8Array,
 ): Promise<TransactionResult> {
-  const ctx: TransferContext = {
-    amount,
-    recipient,
-  };
-  setTransferContext(ctx);
-
-  return contractCtx.privateTransfer();
+  return contractCtx.privateTransfer(amount, recipient);
 }
