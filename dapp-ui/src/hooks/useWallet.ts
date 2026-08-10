@@ -1,5 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { WalletMode, WalletContext } from '../types/index.js';
+import type {
+  DemoDustPhase,
+  DemoDustSnapshot,
+  WalletMode,
+  WalletContext,
+} from '../types/index.js';
 import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
 import {
   generateSeed,
@@ -11,6 +16,10 @@ import {
   createLatestWalletConnection,
   type LatestWalletConnection,
 } from '../midnight/wallet-connection-lifecycle.js';
+import {
+  createLatestDustOperation,
+  type LatestDustOperation,
+} from '../midnight/dust-preparation-lifecycle.js';
 
 export interface UseWalletReturn {
   mode: WalletMode;
@@ -25,6 +34,11 @@ export interface UseWalletReturn {
   syncProgress: WalletSyncProgressSnapshot | null;
   syncElapsedMs: number;
   balance: bigint | null;
+  dustSnapshot: DemoDustSnapshot | null;
+  dustPhase: DemoDustPhase;
+  dustError: string | null;
+  refreshDustStatus: () => Promise<void>;
+  prepareDust: () => Promise<void>;
   error: string | null;
   laceAvailable: boolean;
 }
@@ -38,13 +52,22 @@ export function useWallet(): UseWalletReturn {
   const [syncStartedAt, setSyncStartedAt] = useState<number | null>(null);
   const [syncElapsedMs, setSyncElapsedMs] = useState(0);
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [dustSnapshot, setDustSnapshot] = useState<DemoDustSnapshot | null>(null);
+  const [dustPhase, setDustPhase] = useState<DemoDustPhase>('idle');
+  const [dustError, setDustError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const attemptRef = useRef(0);
+  const dustAttemptRef = useRef(0);
 
   interface ConnectedWalletResource {
     readonly context: WalletContext;
     readonly balance: bigint;
+    readonly dustSnapshot: DemoDustSnapshot | null;
     stop(): Promise<void>;
+  }
+  const dustLifecycleRef = useRef<LatestDustOperation<DemoDustSnapshot> | null>(null);
+  if (dustLifecycleRef.current === null) {
+    dustLifecycleRef.current = createLatestDustOperation<DemoDustSnapshot>();
   }
   const lifecycleRef = useRef<LatestWalletConnection<ConnectedWalletResource> | null>(null);
   if (lifecycleRef.current === null) {
@@ -72,6 +95,11 @@ export function useWallet(): UseWalletReturn {
     setSyncProgress(null);
     setSyncElapsedMs(0);
     setSyncStartedAt(mode === 'demo' ? Date.now() : null);
+    dustAttemptRef.current += 1;
+    dustLifecycleRef.current?.cancel();
+    setDustSnapshot(null);
+    setDustPhase('idle');
+    setDustError(null);
     try {
       await lifecycleRef.current?.connect(async (signal) => {
         let ctx: WalletContext;
@@ -90,9 +118,13 @@ export function useWallet(): UseWalletReturn {
         }
         try {
           const connectedBalance = await ctx.getBalance();
+          const connectedDustSnapshot = ctx.dustPreparation
+            ? await ctx.dustPreparation.readStatus()
+            : null;
           return {
             context: ctx,
             balance: connectedBalance,
+            dustSnapshot: connectedDustSnapshot,
             stop: ctx.stop,
           };
         } catch (connectionError) {
@@ -102,6 +134,7 @@ export function useWallet(): UseWalletReturn {
       }, (resource) => {
         setWalletContext(resource.context);
         setBalance(resource.balance);
+        setDustSnapshot(resource.dustSnapshot);
         setSeed('');
       });
     } catch (err) {
@@ -116,12 +149,77 @@ export function useWallet(): UseWalletReturn {
     }
   }, [mode, seed]);
 
+  const refreshDustStatus = useCallback(async () => {
+    const capability = walletContext?.dustPreparation;
+    if (!capability) return;
+    let attempt: number | null = null;
+    try {
+      await dustLifecycleRef.current?.run(
+        async (signal) => {
+          attempt = ++dustAttemptRef.current;
+          setDustPhase('refreshing');
+          setDustError(null);
+          if (signal.aborted) throw new Error('DUST refresh cancelled');
+          return capability.readStatus();
+        },
+        (snapshot) => {
+          if (attempt !== dustAttemptRef.current) return;
+          setDustSnapshot(snapshot);
+          setBalance(snapshot.tNightBalance);
+        },
+      );
+    } catch (refreshError) {
+      if (attempt !== null && attempt === dustAttemptRef.current) {
+        setDustError(refreshError instanceof Error
+          ? refreshError.message
+          : 'DUST readiness could not be refreshed.');
+      }
+    } finally {
+      if (attempt !== null && attempt === dustAttemptRef.current) setDustPhase('idle');
+    }
+  }, [walletContext]);
+
+  const prepareDust = useCallback(async () => {
+    const capability = walletContext?.dustPreparation;
+    if (!capability) return;
+    let attempt: number | null = null;
+    try {
+      await dustLifecycleRef.current?.run(
+        (signal) => {
+          attempt = ++dustAttemptRef.current;
+          setDustError(null);
+          return capability.prepare(signal, (phase) => {
+            if (attempt === dustAttemptRef.current) setDustPhase(phase);
+          });
+        },
+        (snapshot) => {
+          if (attempt !== dustAttemptRef.current) return;
+          setDustSnapshot(snapshot);
+          setBalance(snapshot.tNightBalance);
+        },
+      );
+    } catch (preparationError) {
+      if (attempt !== null && attempt === dustAttemptRef.current) {
+        setDustError(preparationError instanceof Error
+          ? preparationError.message
+          : 'DUST preparation failed. Refresh before trying again.');
+      }
+    } finally {
+      if (attempt !== null && attempt === dustAttemptRef.current) setDustPhase('idle');
+    }
+  }, [walletContext]);
+
   const disconnect = useCallback(async () => {
     attemptRef.current += 1;
+    dustAttemptRef.current += 1;
+    dustLifecycleRef.current?.cancel();
     setIsConnecting(false);
     setSyncStartedAt(null);
     setWalletContext(null);
     setBalance(null);
+    setDustSnapshot(null);
+    setDustPhase('idle');
+    setDustError(null);
     setError(null);
     setSyncProgress(null);
     setSyncElapsedMs(0);
@@ -137,11 +235,16 @@ export function useWallet(): UseWalletReturn {
 
   const setMode = useCallback(async (nextMode: WalletMode) => {
     attemptRef.current += 1;
+    dustAttemptRef.current += 1;
+    dustLifecycleRef.current?.cancel();
     setModeState(nextMode);
     setIsConnecting(false);
     setSyncStartedAt(null);
     setWalletContext(null);
     setBalance(null);
+    setDustSnapshot(null);
+    setDustPhase('idle');
+    setDustError(null);
     setError(null);
     setSyncProgress(null);
     setSyncElapsedMs(0);
@@ -157,6 +260,8 @@ export function useWallet(): UseWalletReturn {
 
   useEffect(() => () => {
     attemptRef.current += 1;
+    dustAttemptRef.current += 1;
+    dustLifecycleRef.current?.cancel();
     void lifecycleRef.current?.disconnect().catch(() => undefined);
   }, []);
 
@@ -173,6 +278,11 @@ export function useWallet(): UseWalletReturn {
     syncProgress,
     syncElapsedMs,
     balance,
+    dustSnapshot,
+    dustPhase,
+    dustError,
+    refreshDustStatus,
+    prepareDust,
     error,
     laceAvailable,
   };

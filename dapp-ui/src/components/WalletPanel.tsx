@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import type { WalletMode, WalletContext } from '../types/index.js';
+import type {
+  DemoDustPhase,
+  DemoDustSnapshot,
+  WalletMode,
+  WalletContext,
+} from '../types/index.js';
 import { getDetectedWalletName } from '../midnight/wallet.js';
 import { getSecretInputAttributes } from '../midnight/secret-input.js';
 import type { ContractContext } from '../types/index.js';
 import type { WalletSyncProgressSnapshot } from '../midnight/sync-timeout.js';
+import { buildDustPreparationModel } from '../midnight/dust-preparation-model.js';
 
 interface WalletPanelProps {
   mode: WalletMode;
@@ -13,6 +19,8 @@ interface WalletPanelProps {
   onConnect: () => void;
   onDisconnect: () => void;
   onConnectContract: () => void;
+  onRefreshDustStatus: () => void;
+  onPrepareDust: () => void;
   walletContext: WalletContext | null;
   contract: ContractContext | null;
   isConnectingWallet: boolean;
@@ -20,6 +28,9 @@ interface WalletPanelProps {
   syncElapsedMs: number;
   isConnectingContract: boolean;
   walletBalance: bigint | null;
+  dustSnapshot: DemoDustSnapshot | null;
+  dustPhase: DemoDustPhase;
+  dustError: string | null;
   walletError: string | null;
   contractError: string | null;
   laceAvailable: boolean;
@@ -61,6 +72,8 @@ export function WalletPanel({
   onConnect,
   onDisconnect,
   onConnectContract,
+  onRefreshDustStatus,
+  onPrepareDust,
   walletContext,
   contract,
   isConnectingWallet,
@@ -68,12 +81,20 @@ export function WalletPanel({
   syncElapsedMs,
   isConnectingContract,
   walletBalance,
+  dustSnapshot,
+  dustPhase,
+  dustError,
   walletError,
   contractError,
   laceAvailable,
 }: WalletPanelProps) {
   const [isSeedRevealed, setIsSeedRevealed] = useState(false);
   const seedInputAttributes = getSecretInputAttributes(isSeedRevealed);
+  const dustModel = buildDustPreparationModel({
+    snapshot: dustSnapshot,
+    phase: dustPhase,
+    error: dustError,
+  });
 
   // Connected state
   if (walletContext) {
@@ -124,6 +145,56 @@ export function WalletPanel({
           </div>
         </div>
 
+        {walletContext.mode === 'demo' && (
+          <div
+            className="bg-[#16213e] rounded-lg p-6"
+            aria-live="polite"
+          >
+            <h3 className="text-lg font-bold text-white mb-2">DUST Preparation</h3>
+            <p className="text-sm font-medium text-white">{dustModel.title}</p>
+            <p className="text-sm text-[#cccccc] mt-1">{dustModel.description}</p>
+            {dustModel.state === 'ready-to-register' && (
+              <p className="text-xs text-yellow-300 mt-3">
+                Continue only if you intend to submit this on-chain registration.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-3 mt-4">
+              {dustModel.faucetUrl && (
+                <a
+                  href={dustModel.faucetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium"
+                >
+                  Open official Preprod faucet
+                </a>
+              )}
+              {dustModel.canRefresh && (
+                <button
+                  type="button"
+                  onClick={onRefreshDustStatus}
+                  className="bg-[#1a1a2e] border border-[#333] hover:border-[#0066ff] text-[#cccccc] hover:text-white rounded px-4 py-2 text-sm"
+                >
+                  Refresh DUST status
+                </button>
+              )}
+              {dustModel.canRegister && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(
+                      'Register eligible tNIGHT for DUST? This submits an on-chain transaction.',
+                    )) onPrepareDust();
+                  }}
+                  className="bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium"
+                >
+                  Register tNIGHT for DUST
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Contract Connection */}
         {!contract && (
           <div className="bg-[#16213e] rounded-lg p-6">
@@ -133,10 +204,15 @@ export function WalletPanel({
             </p>
             <button
               onClick={onConnectContract}
-              disabled={isConnectingContract}
+              disabled={isConnectingContract
+                || (walletContext.mode === 'demo' && !dustModel.canConnectContract)}
               className="bg-[#0066ff] hover:bg-[#0052cc] text-white rounded px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isConnectingContract ? 'Connecting to contract...' : 'Connect to Contract'}
+              {isConnectingContract
+                ? 'Connecting to contract...'
+                : walletContext.mode === 'demo' && !dustModel.canConnectContract
+                  ? 'Prepare DUST first'
+                  : 'Connect to Contract'}
             </button>
             {contractError && (
               <p className="text-red-400 text-sm mt-3">{contractError}</p>
