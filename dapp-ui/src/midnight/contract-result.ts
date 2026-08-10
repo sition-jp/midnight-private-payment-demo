@@ -28,6 +28,19 @@ export function extractFinalizedTransactionMetadata(
   };
 }
 
+export function makeTransactionResult(
+  result: unknown,
+  explorerBaseUrl: string,
+): TransactionResult {
+  const metadata = extractFinalizedTransactionMetadata(result);
+  return {
+    txHash: metadata.txHash,
+    status: 'confirmed',
+    blockHeight: metadata.blockHeight,
+    explorerUrl: `${explorerBaseUrl}/transactions/0x${metadata.txHash}`,
+  };
+}
+
 /**
  * Read only the JS circuit return value from Midnight's privacy-sensitive
  * finalized-call envelope. Never log, serialize, or expose the full private

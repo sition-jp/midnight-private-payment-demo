@@ -5,6 +5,7 @@ import {
   attachTransferDisclosure,
   extractCircuitResult,
   extractFinalizedTransactionMetadata,
+  makeTransactionResult,
 } from './contract-result.ts';
 import type { TransactionResult, TransferDisclosureSnapshot } from '../types/index.ts';
 
@@ -31,6 +32,27 @@ const syntheticDisclosure: TransferDisclosureSnapshot = {
     recipientSalt: 'ff'.repeat(32),
   },
 };
+
+test('builds the current Preprod Explorer transaction URL', () => {
+  assert.deepEqual(
+    makeTransactionResult(
+      {
+        public: {
+          txHash: 'b3a40853cade84d3468bc8487694b09ee33a6c554812aa3dcb214e6f95d70b07',
+          blockHeight: 123,
+        },
+      },
+      'https://preprod.midnightexplorer.com',
+    ),
+    {
+      txHash: 'b3a40853cade84d3468bc8487694b09ee33a6c554812aa3dcb214e6f95d70b07',
+      status: 'confirmed',
+      blockHeight: 123,
+      explorerUrl:
+        'https://preprod.midnightexplorer.com/transactions/0xb3a40853cade84d3468bc8487694b09ee33a6c554812aa3dcb214e6f95d70b07',
+    },
+  );
+});
 
 test('extracts only public finalized transaction metadata', () => {
   const source = {
