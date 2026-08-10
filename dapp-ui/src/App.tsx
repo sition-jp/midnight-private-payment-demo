@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet } from './hooks/useWallet.js';
 import { useContract } from './hooks/useContract.js';
 import { useTransaction } from './hooks/useTransaction.js';
@@ -30,12 +30,26 @@ function App() {
   const wallet = useWallet();
   const contractHook = useContract();
   const txHook = useTransaction();
+  const isDemoTransactionReady = wallet.mode !== 'demo'
+    || wallet.dustSnapshot?.isDustReady === true;
 
   const handleConnectContract = useCallback(() => {
-    if (wallet.walletContext) {
+    if (wallet.walletContext && isDemoTransactionReady) {
       contractHook.connect(wallet.walletContext);
     }
-  }, [wallet.walletContext, contractHook]);
+  }, [wallet.walletContext, isDemoTransactionReady, contractHook]);
+
+  useEffect(() => {
+    if (wallet.mode !== 'demo' || isDemoTransactionReady || !contractHook.contract) return;
+    contractHook.disconnect();
+    setHasDeposited(false);
+    setLastDepositResult(null);
+    setLastTransferResult(null);
+    setPolicyLogs([]);
+    setIsPolicyRunning(false);
+    policyRunRef.current = false;
+    setActiveTab('wallet');
+  }, [wallet.mode, isDemoTransactionReady, contractHook]);
 
   const handleDeposit = useCallback(
     async (amount: bigint) => {
@@ -157,6 +171,8 @@ function App() {
               setActiveTab('wallet');
             }}
             onConnectContract={handleConnectContract}
+            onRefreshDustStatus={() => { void wallet.refreshDustStatus(); }}
+            onPrepareDust={() => { void wallet.prepareDust(); }}
             walletContext={wallet.walletContext}
             contract={contractHook.contract}
             isConnectingWallet={wallet.isConnecting}
@@ -164,6 +180,9 @@ function App() {
             syncElapsedMs={wallet.syncElapsedMs}
             isConnectingContract={contractHook.isConnecting}
             walletBalance={wallet.balance}
+            dustSnapshot={wallet.dustSnapshot}
+            dustPhase={wallet.dustPhase}
+            dustError={wallet.dustError}
             walletError={wallet.error}
             contractError={contractHook.error}
             laceAvailable={wallet.laceAvailable}

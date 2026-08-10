@@ -9,6 +9,22 @@ import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-ap
 /** Wallet connection mode: seed-based demo or Lace browser extension */
 export type WalletMode = 'demo' | 'lace';
 
+export interface DemoDustSnapshot {
+  readonly tNightBalance: bigint;
+  readonly hasEligibleNight: boolean;
+  readonly isDustReady: boolean;
+}
+
+export type DemoDustPhase = 'idle' | 'refreshing' | 'registering' | 'waiting-for-dust';
+
+export interface DemoDustPreparationCapability {
+  readonly readStatus: () => Promise<DemoDustSnapshot>;
+  readonly prepare: (
+    signal: AbortSignal,
+    onPhase: (phase: DemoDustPhase) => void,
+  ) => Promise<DemoDustSnapshot>;
+}
+
 /**
  * Unified wallet context returned by both demo and Lace wallet modes.
  * Provides everything needed to interact with the Midnight network.
@@ -30,6 +46,8 @@ export interface WalletContext {
   readonly stop: () => Promise<void>;
   /** Get current tNight balance (unshielded) */
   readonly getBalance: () => Promise<bigint>;
+  /** Demo-only capability for registering eligible Preprod tNIGHT for DUST */
+  readonly dustPreparation?: DemoDustPreparationCapability;
 
   // Lace-mode specific fields (undefined for demo mode)
   /** The DApp connector API instance (Lace mode only) */

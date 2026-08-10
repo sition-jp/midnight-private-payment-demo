@@ -45,6 +45,7 @@ import {
   type DemoWalletStateStorage,
   type PersistedDemoWalletState,
 } from './demo-wallet-persistence.js';
+import { createDemoDustPreparation } from './demo-dust-preparation.js';
 import type { WalletContext } from '../types/index.js';
 
 const DEMO_WALLET_IDLE_TIMEOUT_MS = 60_000;
@@ -420,6 +421,37 @@ export async function createWalletFromSeed(
       ),
   };
 
+  const dustPreparation = createDemoDustPreparation({
+    nativeToken: unshieldedToken().raw,
+    readSyncedState: () => internal.wallet.waitForSyncedState(),
+    observeState: (listener) => {
+      const subscription = internal.wallet.state().subscribe(listener);
+      return () => subscription.unsubscribe();
+    },
+    register: (coins, nightVerifyingKey, sign, dustAddress) =>
+      internal.wallet.registerNightUtxosForDustGeneration(
+        coins as Parameters<WalletFacade['registerNightUtxosForDustGeneration']>[0],
+        nightVerifyingKey as Parameters<WalletFacade['registerNightUtxosForDustGeneration']>[1],
+        sign as Parameters<WalletFacade['registerNightUtxosForDustGeneration']>[2],
+        dustAddress as Parameters<WalletFacade['registerNightUtxosForDustGeneration']>[3],
+      ),
+    finalize: (recipe) => internal.wallet.finalizeRecipe(
+      recipe as Parameters<WalletFacade['finalizeRecipe']>[0],
+    ),
+    submit: async (transaction) => {
+      await internal.wallet.submitTransaction(
+        transaction as Parameters<WalletFacade['submitTransaction']>[0],
+      );
+    },
+    revert: (recipe) => internal.wallet.revert(
+      recipe as Parameters<WalletFacade['revert']>[0],
+    ),
+    nightVerifyingKey: internal.unshieldedKeystore.getPublicKey(),
+    sign: (payload) => internal.unshieldedKeystore.signData(payload),
+    dustAddress: state.dust.address,
+    now: () => new Date(),
+  });
+
   return {
     mode: 'demo',
     address,
@@ -440,6 +472,7 @@ export async function createWalletFromSeed(
       const s = await internal.wallet.waitForSyncedState();
       return s.unshielded.balances[unshieldedToken().raw] ?? 0n;
     },
+    dustPreparation,
   };
 }
 

@@ -30,6 +30,10 @@ test('workshop UI states the exact disclosure boundary', () => {
   assert.match(walletPanel, /disposable Preprod demo seed/i);
   assert.match(walletPanel, /never use a real wallet seed/i);
   assert.match(walletPanel, /getSecretInputAttributes/);
+  assert.match(walletPanel, /onPrepareDust/);
+  assert.match(walletPanel, /on-chain registration/i);
+  assert.match(walletPanel, /dustModel\.canConnectContract/);
+  assert.doesNotMatch(walletPanel, /automatically (?:request|register|generate)/i);
 });
 
 test('public MCP instructions pin the reviewed package instead of a moving tag', () => {
