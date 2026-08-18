@@ -103,7 +103,8 @@ export function VisibilityPanel({ disclosure, explorerUrl }: VisibilityPanelProp
                 href={explorerUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-block text-xs text-[#0066ff] hover:text-[#0052cc]"
+                aria-label="View this transaction on Midnight Explorer"
+                className="mt-4 flex w-full items-center justify-center rounded bg-[#0066ff] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0052cc] focus:outline-none focus:ring-2 focus:ring-[#66a3ff]"
               >
                 View on Explorer &rarr;
               </a>

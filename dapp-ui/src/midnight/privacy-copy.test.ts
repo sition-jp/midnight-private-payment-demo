@@ -66,6 +66,8 @@ test('visibility panel binds the tested comparison caption and disclosure copy',
   assert.match(visibilityPanel, /href=\{explorerUrl\}/);
   assert.match(visibilityPanel, /View on Explorer/);
   assert.match(visibilityPanel, /rel="noopener noreferrer"/);
+  assert.match(visibilityPanel, /aria-label="View this transaction on Midnight Explorer"/);
+  assert.match(visibilityPanel, /className="[^"]*w-full[^"]*bg-\[#0066ff\][^"]*text-sm[^"]*font-semibold[^"]*text-white[^"]*"/);
   assert.match(app, /explorerUrl=\{lastTransferResult\?\.explorerUrl \?\? null\}/);
   assert.doesNotMatch(visibilityPanel, /recipient.*hidden on-chain/i);
 });
