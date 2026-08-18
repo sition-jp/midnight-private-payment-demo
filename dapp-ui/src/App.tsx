@@ -233,7 +233,10 @@ function App() {
           />
         )}
         {activeTab === 'visibility' && (
-          <VisibilityPanel disclosure={lastTransferResult?.disclosure ?? null} />
+          <VisibilityPanel
+            disclosure={lastTransferResult?.disclosure ?? null}
+            explorerUrl={lastTransferResult?.explorerUrl ?? null}
+          />
         )}
         {activeTab === 'explorer' && (
           <BalancePanel
