@@ -42,6 +42,8 @@ export interface WalletContext {
   readonly balanceTx: (tx: unknown, ttl?: Date) => Promise<unknown>;
   /** Submit a finalized transaction to the network */
   readonly submitTx: (tx: unknown) => Promise<unknown>;
+  /** Re-read required wallet state immediately before constructing a transaction */
+  readonly prepareTransaction: () => Promise<void>;
   /** Stop the wallet (cleanup) */
   readonly stop: () => Promise<void>;
   /** Get current tNight balance (unshielded) */

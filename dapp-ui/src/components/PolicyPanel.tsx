@@ -12,6 +12,7 @@ interface PolicyPanelProps {
   readonly hasDeposited: boolean;
   readonly isRunning: boolean;
   readonly logs: readonly PolicyLogEntry[];
+  readonly transactionError: string | null;
   readonly onRun: (input: {
     requestedAmount: bigint;
     perTransferLimit: bigint;
@@ -35,6 +36,7 @@ export function PolicyPanel({
   hasDeposited,
   isRunning,
   logs,
+  transactionError,
   onRun,
 }: PolicyPanelProps) {
   const [requestedAmount, setRequestedAmount] = useState('10');
@@ -148,6 +150,11 @@ export function PolicyPanel({
               {validationError}
             </p>
           )}
+          {transactionError && (
+            <p role="alert" className="text-sm text-red-400 border border-red-500/40 rounded p-3">
+              {transactionError}
+            </p>
+          )}
         </div>
       </section>
 
@@ -169,6 +176,16 @@ export function PolicyPanel({
                     limit: {entry.localInputs.perTransferLimit.toString()}, available balance:{' '}
                     {entry.localInputs.availableBalance.toString()}
                   </p>
+                )}
+                {entry.stage === 'confirmed' && entry.explorerUrl && (
+                  <a
+                    href={entry.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-xs text-[#0066ff] hover:text-[#0052cc] mt-2"
+                  >
+                    View on Explorer &rarr;
+                  </a>
                 )}
               </li>
             ))}

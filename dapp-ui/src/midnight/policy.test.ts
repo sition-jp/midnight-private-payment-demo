@@ -79,12 +79,23 @@ test('runner submits exactly one approved transfer and emits sequential stages',
   ]);
   assert.equal(result.transaction, syntheticTransactionResult);
   assert.deepEqual(result.logs.map((entry) => entry.sequence), [1, 2, 3, 4]);
+  const confirmed = result.logs.find((entry) => entry.stage === 'confirmed');
+  assert.equal(confirmed?.explorerUrl, syntheticTransactionResult.explorerUrl);
+  assert.ok(
+    result.logs
+      .filter((entry) => entry.stage !== 'confirmed')
+      .every((entry) => entry.explorerUrl === undefined),
+  );
   const serializedLogs = JSON.stringify(
     result.logs,
     (_key, value: unknown) => typeof value === 'bigint' ? value.toString() : value,
   );
   assert.doesNotMatch(serializedLogs, new RegExp(syntheticRecipient, 'i'));
-  assert.doesNotMatch(serializedLogs, /synthetic-transaction-hash/);
+  const serializedPreConfirmationLogs = JSON.stringify(
+    result.logs.slice(0, -1),
+    (_key, value: unknown) => typeof value === 'bigint' ? value.toString() : value,
+  );
+  assert.doesNotMatch(serializedPreConfirmationLogs, /synthetic-transaction-hash/);
 });
 
 test('runner rejects without calling the transfer dependency', async () => {

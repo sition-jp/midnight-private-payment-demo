@@ -9,6 +9,7 @@ import type { TransferDisclosureSnapshot } from '../types/index.js';
 
 interface VisibilityPanelProps {
   readonly disclosure: TransferDisclosureSnapshot | null;
+  readonly explorerUrl: string | null;
 }
 
 function shortHex(value: string): string {
@@ -35,7 +36,7 @@ function VisibilityRows({ rows }: { readonly rows: readonly VisibilityRow[] }) {
   );
 }
 
-export function VisibilityPanel({ disclosure }: VisibilityPanelProps) {
+export function VisibilityPanel({ disclosure, explorerUrl }: VisibilityPanelProps) {
   const [repetition, setRepetition] = useState<RepetitionMode>(1);
 
   if (!disclosure) {
@@ -97,6 +98,16 @@ export function VisibilityPanel({ disclosure }: VisibilityPanelProps) {
             <h3 className="font-semibold text-[#66a3ff]">Midnight put on-chain</h3>
             <p className="mb-4 mt-1 text-xs text-[#888]">Visible to public observers</p>
             <VisibilityRows rows={model.onChain} />
+            {explorerUrl && (
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-block text-xs text-[#0066ff] hover:text-[#0052cc]"
+              >
+                View on Explorer &rarr;
+              </a>
+            )}
           </article>
 
           <article className="rounded-lg border border-green-900/60 bg-[#1a1a2e] p-4">

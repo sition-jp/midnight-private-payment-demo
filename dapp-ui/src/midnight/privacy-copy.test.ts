@@ -54,6 +54,7 @@ test('public MCP instructions pin the reviewed package instead of a moving tag',
 
 test('visibility panel binds the tested comparison caption and disclosure copy', () => {
   const visibilityPanel = read('../components/VisibilityPanel.tsx');
+  const app = read('../App.tsx');
 
   assert.match(visibilityPanel, /Public chain comparison/);
   assert.match(visibilityPanel, /Midnight put on-chain/);
@@ -62,6 +63,10 @@ test('visibility panel binds the tested comparison caption and disclosure copy',
   assert.match(visibilityPanel, /Amounts remain hidden/);
   assert.match(visibilityPanel, /Illustration only/);
   assert.match(visibilityPanel, /publicComparisonCaption/);
+  assert.match(visibilityPanel, /href=\{explorerUrl\}/);
+  assert.match(visibilityPanel, /View on Explorer/);
+  assert.match(visibilityPanel, /rel="noopener noreferrer"/);
+  assert.match(app, /explorerUrl=\{lastTransferResult\?\.explorerUrl \?\? null\}/);
   assert.doesNotMatch(visibilityPanel, /recipient.*hidden on-chain/i);
 });
 
@@ -73,6 +78,8 @@ test('automatic payment policy states its local-only boundary and PoC limitation
   assert.match(policyPanel, /not a complete two-party payment/i);
   assert.doesNotMatch(policyPanel, /AI agent/i);
   assert.match(policyPanel, /type="password"/);
+  assert.match(policyPanel, /entry\.explorerUrl/);
+  assert.match(policyPanel, /View on Explorer/);
 });
 
 test('workshop script does not claim recipient anonymity or complete payment delivery', () => {
