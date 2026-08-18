@@ -19,6 +19,7 @@ export interface PolicyLogEntry {
   readonly code: string;
   readonly message: string;
   readonly localInputs?: PaymentPolicyInput;
+  readonly explorerUrl?: string;
 }
 
 export interface PolicyRunInput {
@@ -59,6 +60,7 @@ export async function runAutomaticPaymentPolicy(
     code: string,
     message: string,
     localInputs?: PaymentPolicyInput,
+    explorerUrl?: string,
   ): void => {
     const entry: PolicyLogEntry = {
       sequence: logs.length + 1,
@@ -66,6 +68,7 @@ export async function runAutomaticPaymentPolicy(
       code,
       message,
       ...(localInputs ? { localInputs } : {}),
+      ...(explorerUrl ? { explorerUrl } : {}),
     };
     logs.push(entry);
     onLog?.(entry);
@@ -91,7 +94,13 @@ export async function runAutomaticPaymentPolicy(
       return { decision, transaction: null, logs };
     }
 
-    emit('confirmed', 'transfer_confirmed', 'The approved transfer confirmed.');
+    emit(
+      'confirmed',
+      'transfer_confirmed',
+      'The approved transfer confirmed.',
+      undefined,
+      transaction.explorerUrl,
+    );
     return { decision, transaction, logs };
   } catch {
     emit('failed', 'transfer_failed', 'The approved transfer did not confirm.');

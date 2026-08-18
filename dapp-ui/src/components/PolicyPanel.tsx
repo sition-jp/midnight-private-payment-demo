@@ -177,6 +177,16 @@ export function PolicyPanel({
                     {entry.localInputs.availableBalance.toString()}
                   </p>
                 )}
+                {entry.stage === 'confirmed' && entry.explorerUrl && (
+                  <a
+                    href={entry.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-xs text-[#0066ff] hover:text-[#0052cc] mt-2"
+                  >
+                    View on Explorer &rarr;
+                  </a>
+                )}
               </li>
             ))}
           </ol>
