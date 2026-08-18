@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import type { ContractContext, TransactionResult } from '../types/index.js';
 import { executePrivateTransfer } from '../midnight/contract.js';
 import { parseRecipientPublicKeyHex } from '../midnight/recipient.js';
+import { getTransactionErrorPresentation } from '../midnight/transaction-preflight.js';
 
 export interface CurrentTx {
   type: 'deposit' | 'transfer' | 'balance';
@@ -21,12 +22,15 @@ export interface UseTransactionReturn {
   transactions: TransactionResult[];
   currentTx: CurrentTx | null;
   balance: bigint | null;
+  requiresReconnect: boolean;
+  resetConnectionRequirement: () => void;
 }
 
 export function useTransaction(): UseTransactionReturn {
   const [transactions, setTransactions] = useState<TransactionResult[]>([]);
   const [currentTx, setCurrentTx] = useState<CurrentTx | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
+  const [requiresReconnect, setRequiresReconnect] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startTimer = useCallback((type: CurrentTx['type']) => {
@@ -46,6 +50,10 @@ export function useTransaction(): UseTransactionReturn {
     }
   }, []);
 
+  const resetConnectionRequirement = useCallback(() => {
+    setRequiresReconnect(false);
+  }, []);
+
   const deposit = useCallback(
     async (contract: ContractContext, amount: bigint): Promise<TransactionResult | null> => {
       startTimer('deposit');
@@ -57,9 +65,10 @@ export function useTransaction(): UseTransactionReturn {
         return result;
       } catch (err) {
         stopTimer();
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const failure = getTransactionErrorPresentation(err);
+        if (failure.requiresReconnect) setRequiresReconnect(true);
         setCurrentTx((prev) =>
-          prev ? { ...prev, status: 'failed', error: errorMsg } : null,
+          prev ? { ...prev, status: 'failed', error: failure.message } : null,
         );
         return null;
       }
@@ -83,9 +92,10 @@ export function useTransaction(): UseTransactionReturn {
         return result;
       } catch (err) {
         stopTimer();
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const failure = getTransactionErrorPresentation(err);
+        if (failure.requiresReconnect) setRequiresReconnect(true);
         setCurrentTx((prev) =>
-          prev ? { ...prev, status: 'failed', error: errorMsg } : null,
+          prev ? { ...prev, status: 'failed', error: failure.message } : null,
         );
         return null;
       }
@@ -107,9 +117,10 @@ export function useTransaction(): UseTransactionReturn {
         return result;
       } catch (err) {
         stopTimer();
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const failure = getTransactionErrorPresentation(err);
+        if (failure.requiresReconnect) setRequiresReconnect(true);
         setCurrentTx((prev) =>
-          prev ? { ...prev, status: 'failed', error: errorMsg } : null,
+          prev ? { ...prev, status: 'failed', error: failure.message } : null,
         );
         return null;
       }
@@ -124,5 +135,7 @@ export function useTransaction(): UseTransactionReturn {
     transactions,
     currentTx,
     balance,
+    requiresReconnect,
+    resetConnectionRequirement,
   };
 }

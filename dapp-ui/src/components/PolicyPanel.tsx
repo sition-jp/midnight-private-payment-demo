@@ -12,6 +12,7 @@ interface PolicyPanelProps {
   readonly hasDeposited: boolean;
   readonly isRunning: boolean;
   readonly logs: readonly PolicyLogEntry[];
+  readonly transactionError: string | null;
   readonly onRun: (input: {
     requestedAmount: bigint;
     perTransferLimit: bigint;
@@ -35,6 +36,7 @@ export function PolicyPanel({
   hasDeposited,
   isRunning,
   logs,
+  transactionError,
   onRun,
 }: PolicyPanelProps) {
   const [requestedAmount, setRequestedAmount] = useState('10');
@@ -146,6 +148,11 @@ export function PolicyPanel({
           {validationError && (
             <p className="text-sm text-red-400 border border-red-500/40 rounded p-3">
               {validationError}
+            </p>
+          )}
+          {transactionError && (
+            <p role="alert" className="text-sm text-red-400 border border-red-500/40 rounded p-3">
+              {transactionError}
             </p>
           )}
         </div>

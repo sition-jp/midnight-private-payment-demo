@@ -30,14 +30,29 @@ function App() {
   const wallet = useWallet();
   const contractHook = useContract();
   const txHook = useTransaction();
+  const connectedContract = contractHook.contract;
+  const connectContract = contractHook.connect;
+  const disconnectContract = contractHook.disconnect;
+  const resetConnectionRequirement = txHook.resetConnectionRequirement;
   const isDemoTransactionReady = wallet.mode !== 'demo'
     || wallet.dustSnapshot?.isDustReady === true;
 
   const handleConnectContract = useCallback(() => {
     if (wallet.walletContext && isDemoTransactionReady) {
-      contractHook.connect(wallet.walletContext);
+      resetConnectionRequirement();
+      connectContract(wallet.walletContext);
     }
-  }, [wallet.walletContext, isDemoTransactionReady, contractHook]);
+  }, [wallet.walletContext, isDemoTransactionReady, connectContract, resetConnectionRequirement]);
+
+  useEffect(() => {
+    if (!txHook.requiresReconnect || !connectedContract) return;
+    disconnectContract();
+    setHasDeposited(false);
+    setLastDepositResult(null);
+    setLastTransferResult(null);
+    setIsPolicyRunning(false);
+    policyRunRef.current = false;
+  }, [txHook.requiresReconnect, connectedContract, disconnectContract]);
 
   useEffect(() => {
     if (wallet.mode !== 'demo' || isDemoTransactionReady || !contractHook.contract) return;
@@ -119,6 +134,7 @@ function App() {
         mode={wallet.mode}
         onModeChange={(m) => {
           void wallet.setMode(m);
+          txHook.resetConnectionRequirement();
           contractHook.disconnect();
           setHasDeposited(false);
           setLastDepositResult(null);
@@ -161,6 +177,7 @@ function App() {
             onConnect={wallet.connect}
             onDisconnect={() => {
               void wallet.disconnect();
+              txHook.resetConnectionRequirement();
               contractHook.disconnect();
               setHasDeposited(false);
               setLastDepositResult(null);
@@ -211,6 +228,7 @@ function App() {
             hasDeposited={hasDeposited}
             isRunning={isPolicyRunning}
             logs={policyLogs}
+            transactionError={txHook.requiresReconnect ? txHook.currentTx?.error ?? null : null}
             onRun={handlePolicyRun}
           />
         )}

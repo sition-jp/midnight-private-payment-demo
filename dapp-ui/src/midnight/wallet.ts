@@ -46,6 +46,7 @@ import {
   type PersistedDemoWalletState,
 } from './demo-wallet-persistence.js';
 import { createDemoDustPreparation } from './demo-dust-preparation.js';
+import { createWalletFreshnessCheck } from './transaction-preflight.js';
 import type { WalletContext } from '../types/index.js';
 
 const DEMO_WALLET_IDLE_TIMEOUT_MS = 60_000;
@@ -451,6 +452,10 @@ export async function createWalletFromSeed(
     dustAddress: state.dust.address,
     now: () => new Date(),
   });
+  const prepareTransaction = createWalletFreshnessCheck(async () => {
+    const synchronizedState = await internal.wallet.waitForSyncedState();
+    return synchronizedState.dust.balance(new Date()) > 0n;
+  });
 
   return {
     mode: 'demo',
@@ -459,6 +464,7 @@ export async function createWalletFromSeed(
     encryptionPublicKey,
     balanceTx: walletProvider.balanceTx,
     submitTx: walletProvider.submitTx,
+    prepareTransaction,
     stop: async () => {
       try {
         await promoteSynchronizedDemoWalletState(cache.storage, cache.cacheKey, internal);
@@ -541,6 +547,10 @@ export async function connectLace(signal?: AbortSignal): Promise<WalletContext> 
       }
       await connectedWallet.submitTransaction(tx);
     },
+    prepareTransaction: createWalletFreshnessCheck(async () => {
+      await readRequiredWalletState(connectedWallet);
+      return true;
+    }),
     stop: async () => {
       // Extension wallets don't need cleanup
     },

@@ -41,6 +41,7 @@ import {
   type PrivatePaymentState,
 } from './witness.js';
 import { createContractCallQueue } from './contract-serialization.js';
+import { createTransactionPreflight } from './transaction-preflight.js';
 import { getDemoWalletProvider } from './wallet.js';
 import type {
   WalletContext,
@@ -232,6 +233,7 @@ export async function connectToContract(
   const senderPublicKey = deriveContractPublicKey(secretKey);
   const transferContext = createTransferContext();
   const callQueue = createContractCallQueue();
+  const transactionPreflight = createTransactionPreflight(walletCtx.prepareTransaction);
   const { compiledContract, contractModule } = await buildCompiledContract(transferContext);
   const providers = walletCtx.mode === 'lace' && walletCtx.rawWalletApi
     ? await create1AMProviders(walletCtx, privateStateProvider)
@@ -263,57 +265,63 @@ export async function connectToContract(
 
     async deposit(amount: bigint): Promise<TransactionResult> {
       return callQueue.run(async () => {
-        const result = await contract.callTx.deposit(amount);
-        return makeTransactionResult(result);
+        return transactionPreflight.run(async () => {
+          const result = await contract.callTx.deposit(amount);
+          return makeTransactionResult(result);
+        });
       });
     },
 
     async privateTransfer(amount: bigint, recipient: Uint8Array): Promise<TransactionResult> {
       return callQueue.run(async () => {
-        const submitted = {
-          amount,
-          recipient: new Uint8Array(recipient),
-        };
-        setTransferContext(transferContext, submitted);
-        try {
-          const result = await contract.callTx.private_transfer();
-          const transaction = makeTransactionResult(result);
-          return attachTransferDisclosure(transaction, () => {
-            const publicState = getPublicNextContractState(result);
-            const privateState = getPrivateNextState(result);
-            const ledgerView = contractModule.ledger(
-              publicState as Parameters<typeof contractModule.ledger>[0],
-            );
-            return buildTransferDisclosure({
-              senderPublicKey,
-              recipientPublicKey: submitted.recipient,
-              amount: submitted.amount,
-              txHash: transaction.txHash,
-              blockHeight: requireBlockHeight(transaction.blockHeight),
-              senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
-              recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
-              nextPrivateState: privateState,
+        return transactionPreflight.run(async () => {
+          const submitted = {
+            amount,
+            recipient: new Uint8Array(recipient),
+          };
+          setTransferContext(transferContext, submitted);
+          try {
+            const result = await contract.callTx.private_transfer();
+            const transaction = makeTransactionResult(result);
+            return attachTransferDisclosure(transaction, () => {
+              const publicState = getPublicNextContractState(result);
+              const privateState = getPrivateNextState(result);
+              const ledgerView = contractModule.ledger(
+                publicState as Parameters<typeof contractModule.ledger>[0],
+              );
+              return buildTransferDisclosure({
+                senderPublicKey,
+                recipientPublicKey: submitted.recipient,
+                amount: submitted.amount,
+                txHash: transaction.txHash,
+                blockHeight: requireBlockHeight(transaction.blockHeight),
+                senderCommitment: ledgerView.balance_commitments.lookup(senderPublicKey),
+                recipientCommitment: ledgerView.balance_commitments.lookup(submitted.recipient),
+                nextPrivateState: privateState,
+              });
             });
-          });
-        } finally {
-          submitted.recipient.fill(0);
-          clearTransferContext(transferContext);
-        }
+          } finally {
+            submitted.recipient.fill(0);
+            clearTransferContext(transferContext);
+          }
+        });
       });
     },
 
     async checkBalance(): Promise<TransactionResult> {
       return callQueue.run(async () => {
-        const result = await contract.callTx.check_balance();
-        // The contract discloses this value, but midnight-js wraps all JS circuit
-        // return values in the generic privacy-sensitive `private.result` envelope.
-        // Extract only the value; never log or persist the surrounding object.
-        const balance = extractCircuitResult(result);
-        if (typeof balance !== 'bigint') {
-          throw new Error('Disclosed contract balance is unavailable');
-        }
-        const txResult = makeTransactionResult(result);
-        return { ...txResult, result: balance };
+        return transactionPreflight.run(async () => {
+          const result = await contract.callTx.check_balance();
+          // The contract discloses this value, but midnight-js wraps all JS circuit
+          // return values in the generic privacy-sensitive `private.result` envelope.
+          // Extract only the value; never log or persist the surrounding object.
+          const balance = extractCircuitResult(result);
+          if (typeof balance !== 'bigint') {
+            throw new Error('Disclosed contract balance is unavailable');
+          }
+          const txResult = makeTransactionResult(result);
+          return { ...txResult, result: balance };
+        });
       });
     },
 
