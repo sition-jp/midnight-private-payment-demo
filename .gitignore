@@ -43,3 +43,6 @@ logs/
 
 # Local files
 *.local
+
+# Claude Code local settings (per-user approvals; may hold secrets)
+.claude/settings.local.json
